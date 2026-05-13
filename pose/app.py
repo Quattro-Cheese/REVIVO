@@ -6,6 +6,7 @@ import cv2
 from pose.detector import PoseDetector
 from pose.evaluator import HysteresisJudge, evaluate_pose
 from pose.visualizer import draw_eval_result, draw_pose_points
+from pose.sensor_reader import UltrasonicReader
 
 MAX_FRAME_FAILURES = 10
 
@@ -21,9 +22,14 @@ def main() -> None:
     detector = PoseDetector(model_path=str(model_path))
     hysteresis = HysteresisJudge()
 
+    # 아두이노 초음파 센서 연결
+    ultrasonic = UltrasonicReader(port="COM3", baudrate=9600)
+
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("카메라를 열 수 없습니다.")
+        ultrasonic.close()
+        detector.close()
         return
 
     consecutive_failures = 0
@@ -37,6 +43,7 @@ def main() -> None:
                     print("카메라 프레임을 읽을 수 없습니다.")
                     break
                 continue
+
             consecutive_failures = 0
 
             frame = cv2.flip(frame, 1)
@@ -52,8 +59,11 @@ def main() -> None:
                 hysteresis,
             )
 
+            # 아두이노에서 초음파 센서 거리값 읽기
+            distance_cm = ultrasonic.update()
+
             if eval_result is not None:
-                draw_eval_result(frame, eval_result)
+                draw_eval_result(frame, eval_result, distance_cm)
 
             cv2.putText(
                 frame,
@@ -66,10 +76,13 @@ def main() -> None:
             )
 
             cv2.imshow("CPR Pose Estimation", frame)
+
+            # ESC 키 누르면 종료
             if cv2.waitKey(1) & 0xFF == 27:
                 break
 
     finally:
+        ultrasonic.close()
         cap.release()
         detector.close()
         cv2.destroyAllWindows()
