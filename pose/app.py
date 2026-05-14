@@ -85,7 +85,7 @@ def main() -> None:
                 )
 
                 tts.speak(voice_feedback)
-                draw_eval_result(frame, eval_result, distance_cm)
+                draw_eval_result(frame, eval_result, distance_cm, rep_result)
 
             cv2.putText(
                 frame,
