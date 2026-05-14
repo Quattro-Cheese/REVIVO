@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from math import isfinite
 from statistics import median
 from typing import Optional
 
@@ -64,6 +65,21 @@ class RepCounter:
         # 60Hz로 들어오는 초음파 센서값 중 노이즈 하나가 최저점으로 잡히는 문제를 줄임.
         depth_window_size: int = 5,
     ) -> None:
+        if calibration_samples <= 0:
+            raise ValueError("calibration_samples must be greater than 0")
+        if depth_window_size <= 0:
+            raise ValueError("depth_window_size must be greater than 0")
+        if enter_threshold_cm <= release_threshold_cm:
+            raise ValueError("enter_threshold_cm must be greater than release_threshold_cm")
+        if refractory_ms < 0:
+            raise ValueError("refractory_ms must be greater than or equal to 0")
+        if target_bpm <= 0:
+            raise ValueError("target_bpm must be greater than 0")
+        if target_depth_min_cm <= 0 or target_depth_max_cm <= 0:
+            raise ValueError("target depth range must be greater than 0")
+        if target_depth_min_cm > target_depth_max_cm:
+            raise ValueError("target_depth_min_cm must be less than or equal to target_depth_max_cm")
+
         self.calibration_samples = calibration_samples
         self.enter_threshold_cm = enter_threshold_cm
         self.release_threshold_cm = release_threshold_cm
@@ -107,6 +123,9 @@ class RepCounter:
     def update(self, timestamp_ms: int, signal_value: Optional[float]) -> RepResult:
         if self._metronome_start_ms is None:
             self._metronome_start_ms = timestamp_ms
+
+        if signal_value is not None and not isfinite(signal_value):
+            signal_value = None
 
         if signal_value is None:
             bpm = self._calc_bpm()
@@ -171,7 +190,8 @@ class RepCounter:
         self._current_velocity = velocity
         self._current_acceleration = acceleration
 
-        self._update_state(timestamp_ms, self._filtered_depth)
+        # 상태 전이는 EMA보다 반응이 빠른 median depth로 판단해 release 지연을 줄인다.
+        self._update_state(timestamp_ms, median_depth)
 
         bpm = self._calc_bpm()
         return RepResult(
@@ -250,12 +270,6 @@ class RepCounter:
                 self._in_compression = True
                 self._current_peak_depth = depth_now
                 self._current_peak_time = timestamp_ms
-
-                # [수정] 카운트는 압박 시작 시점에 증가시키되,
-                # 깊이 평가는 압박이 끝날 때 peak_depth 기준으로 확정한다.
-                self._count += 1
-                self._compression_times.append(timestamp_ms)
-                self._last_peak_time = timestamp_ms
         else:
             # [수정] 압박 중에는 매 샘플마다 최고 깊이와 그 시각을 저장.
             # 60Hz로 들어오는 모든 측정값을 보면서 peak를 갱신하므로
@@ -267,10 +281,14 @@ class RepCounter:
             if depth_now <= self.release_threshold_cm:
                 self._in_compression = False
 
-                # [수정] 한 회 압박이 끝난 시점에 peak_depth를 저장하고,
-                # 5~6cm 범위인지 판정한다.
-                self._peak_depths.append(self._current_peak_depth)
-                self._last_depth_feedback = self._depth_feedback(self._current_peak_depth)
+                # 릴리즈까지 확인된 압박만 1회로 인정한다.
+                peak_time = self._current_peak_time or timestamp_ms
+                peak_depth = self._current_peak_depth
+                self._count += 1
+                self._compression_times.append(peak_time)
+                self._last_peak_time = peak_time
+                self._peak_depths.append(peak_depth)
+                self._last_depth_feedback = self._depth_feedback(peak_depth)
 
                 self._current_peak_depth = 0.0
                 self._current_peak_time = None
@@ -313,7 +331,7 @@ class RepCounter:
         if not self._peak_depths:
             return None
 
-        return float(sum(self._peak_depths) / len(self._peak_depths))
+        return self._peak_depths[-1]
 
     def _beat_now(self, timestamp_ms: int) -> bool:
         if self._metronome_start_ms is None:
