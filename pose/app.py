@@ -4,12 +4,6 @@ from pathlib import Path
 import time
 import cv2
 
-from __future__ import annotations
-
-from pathlib import Path
-import time
-import cv2
-
 from pose.detector import PoseDetector
 from pose.evaluator import HysteresisJudge, evaluate_pose
 from pose.visualizer import draw_eval_result, draw_pose_points
@@ -72,16 +66,16 @@ def main() -> None:
 
             # 아두이노에서 초음파 센서 거리값 읽기
             distance_cm = ultrasonic.update()
-            timestamp_ms = int(time.time() * 1000)
+            timestamp_ms = int(time.monotonic() * 1000)
             rep_result = rep_counter.update(
                 timestamp_ms=timestamp_ms,
                 signal_value=distance_cm,
             )
             if eval_result is not None:
                 voice_feedback = generate_voice_feedback(
-                bpm=rep_result.bpm,
-                depth_cm=rep_result.depth_now,
-                posture_correct=eval_result.is_correct,
+                    bpm=rep_result.bpm,
+                    depth_cm=rep_result.peak_depth,
+                    posture_correct=eval_result.is_correct,
                 )
 
                 tts.speak(voice_feedback)
