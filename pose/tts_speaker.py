@@ -1,36 +1,46 @@
 from __future__ import annotations
 
-from typing import Optional
+import subprocess
+import time
 
 
-def generate_cpr_feedback(
-    bpm: Optional[float],
-    depth_cm: Optional[float],
-    posture_correct: bool,
-) -> str:
-    messages = []
+class TTSSpeaker:
+    def __init__(self, interval_sec: float = 2.5) -> None:
+        self.interval_sec = interval_sec
+        self.last_spoken_time = 0.0
+        self.process: subprocess.Popen[bytes] | None = None
 
-    if not posture_correct:
-        messages.append("팔 자세를 곧게 유지하세요.")
-    else:
-        messages.append("팔 자세가 적절합니다.")
+    def speak(self, message: str) -> None:
+        if not message:
+            return
 
-    if depth_cm is None:
-        messages.append("압박 깊이를 측정 중입니다.")
-    elif depth_cm < 5.0:
-        messages.append("압박 깊이가 부족합니다. 조금 더 깊게 압박하세요.")
-    elif depth_cm > 6.0:
-        messages.append("압박 깊이가 과합니다. 힘을 조금 줄이세요.")
-    else:
-        messages.append("압박 깊이가 적절합니다.")
+        now = time.time()
 
-    if bpm is None:
-        messages.append("압박 속도를 측정 중입니다.")
-    elif bpm < 100:
-        messages.append("압박 속도가 느립니다. 조금 더 빠르게 압박하세요.")
-    elif bpm > 120:
-        messages.append("압박 속도가 빠릅니다. 조금만 천천히 압박하세요.")
-    else:
-        messages.append("압박 속도가 적절합니다.")
+        # 너무 자주 말하지 않도록 제한
+        if now - self.last_spoken_time < self.interval_sec:
+            return
 
-    return " ".join(messages)
+        # 이전 음성이 아직 재생 중이면 새 음성은 무시
+        if self.process is not None and self.process.poll() is None:
+            return
+
+        self.last_spoken_time = now
+
+        # PowerShell 문자열에서 작은따옴표 처리
+        safe_message = message.replace("'", "''")
+
+        command = (
+            "Add-Type -AssemblyName System.Speech; "
+            "$speaker = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+            "$speaker.Rate = 0; "
+            "$speaker.Volume = 100; "
+            f"$speaker.Speak('{safe_message}');"
+        )
+
+        print("TTS SPEAK:", repr(message))
+
+        self.process = subprocess.Popen(
+            ["powershell", "-NoProfile", "-Command", command],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
