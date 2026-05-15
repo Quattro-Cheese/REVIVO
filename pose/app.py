@@ -14,8 +14,9 @@ from pose.detector import PoseDetector
 from pose.evaluator import HysteresisJudge, evaluate_pose
 from pose.visualizer import draw_eval_result, draw_pose_points
 from pose.sensor_reader import UltrasonicReader
-from pose.feedback_generator import generate_voice_feedback
-from pose.tts_speaker import TTSSpeaker
+
+# from pose.feedback_generator import generate_voice_feedback
+# from pose.tts_speaker import TTSSpeaker
 from counter.rep_counter import RepCounter
 
 MAX_FRAME_FAILURES = 10
@@ -24,7 +25,7 @@ MAX_FRAME_FAILURES = 10
 def main() -> None:
     project_root = Path(__file__).resolve().parent
     model_path = project_root / "models" / "pose_landmarker_full.task"
-    
+
     if not model_path.exists():
         print(f"모델 파일을 찾을 수 없습니다: {model_path}")
         return
@@ -34,8 +35,9 @@ def main() -> None:
 
     # 아두이노 초음파 센서 연결
     ultrasonic = UltrasonicReader(port="COM3", baudrate=9600)
+
     rep_counter = RepCounter()
-    tts = TTSSpeaker(interval_sec=2.5)
+    # tts = TTSSpeaker(interval_sec=2.5)
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("카메라를 열 수 없습니다.")
@@ -44,7 +46,7 @@ def main() -> None:
         return
 
     consecutive_failures = 0
-    
+
     try:
         while True:
             ret, frame = cap.read()
@@ -72,19 +74,22 @@ def main() -> None:
 
             # 아두이노에서 초음파 센서 거리값 읽기
             distance_cm = ultrasonic.update()
+
+            if eval_result is not None:
+                draw_eval_result(frame, eval_result, distance_cm)
             timestamp_ms = int(time.time() * 1000)
             rep_result = rep_counter.update(
                 timestamp_ms=timestamp_ms,
                 signal_value=distance_cm,
             )
             if eval_result is not None:
-                voice_feedback = generate_voice_feedback(
-                bpm=rep_result.bpm,
-                depth_cm=rep_result.depth_now,
-                posture_correct=eval_result.is_correct,
-                )
+                # voice_feedback = generate_voice_feedback(
+                #     bpm=rep_result.bpm,
+                #     depth_cm=rep_result.depth_now,
+                #     posture_correct=eval_result.is_correct,
+                # )
 
-                tts.speak(voice_feedback)
+                # tts.speak(voice_feedback)
                 draw_eval_result(frame, eval_result, distance_cm, rep_result)
 
             cv2.putText(
