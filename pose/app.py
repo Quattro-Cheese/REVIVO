@@ -4,19 +4,10 @@ from pathlib import Path
 import time
 import cv2
 
-from __future__ import annotations
-
-from pathlib import Path
-import time
-import cv2
-
 from pose.detector import PoseDetector
 from pose.evaluator import HysteresisJudge, evaluate_pose
 from pose.visualizer import draw_eval_result, draw_pose_points
 from pose.sensor_reader import UltrasonicReader
-
-# from pose.feedback_generator import generate_voice_feedback
-# from pose.tts_speaker import TTSSpeaker
 from counter.rep_counter import RepCounter
 
 MAX_FRAME_FAILURES = 10
@@ -34,16 +25,22 @@ def main() -> None:
     hysteresis = HysteresisJudge()
 
     # 아두이노 초음파 센서 연결
-    ultrasonic = UltrasonicReader(port="COM3", baudrate=9600)
+    ultrasonic = UltrasonicReader(port="COM12", baudrate=9600)
 
-    rep_counter = RepCounter()
-    # tts = TTSSpeaker(interval_sec=2.5)
+    # CPR 압박 횟수, 깊이, BPM 계산
+    rep_counter = RepCounter(target_bpm=120)
+
+    # TTS 음성 안내
+    tts = TTSSpeaker(interval_sec=1.0)
+
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("카메라를 열 수 없습니다.")
         ultrasonic.close()
         detector.close()
         return
+
+    tts.speak("시작합니다.")
 
     consecutive_failures = 0
 
@@ -61,6 +58,7 @@ def main() -> None:
 
             frame = cv2.flip(frame, 1)
 
+            # 자세 추정
             pose_result = detector.detect(frame)
             draw_pose_points(frame, pose_result.image_landmarks)
 
@@ -72,25 +70,104 @@ def main() -> None:
                 hysteresis,
             )
 
-            # 아두이노에서 초음파 센서 거리값 읽기
+            # 초음파 센서 거리값 읽기
             distance_cm = ultrasonic.update()
+ ugang-patch-6
 
-            if eval_result is not None:
-                draw_eval_result(frame, eval_result, distance_cm)
-            timestamp_ms = int(time.time() * 1000)
+            # RepCounter로 압박 깊이, count, BPM 계산
+            timestamp_ms = int(time.monotonic() * 1000)
+
             rep_result = rep_counter.update(
                 timestamp_ms=timestamp_ms,
                 signal_value=distance_cm,
             )
-            if eval_result is not None:
-                # voice_feedback = generate_voice_feedback(
-                #     bpm=rep_result.bpm,
-                #     depth_cm=rep_result.depth_now,
-                #     posture_correct=eval_result.is_correct,
-                # )
+ main
+            rep_result = rep_counter.update(
+                timestamp_ms=timestamp_ms,
+                signal_value=distance_cm,
+            )
 
-                # tts.speak(voice_feedback)
+            # 자세 인식 성공 여부와 관계없이 초음파/TTS는 동작하게 처리
+            if eval_result is not None:
+ ugang-patch-6
+                posture_correct = eval_result.is_correct
+            else:
+                posture_correct = True
+
+            # TTS 피드백 문장 생성
+            voice_feedback = generate_voice_feedback(
+                bpm=rep_result.bpm,
+                depth_cm=rep_result.depth_now,
+               posture_correct=posture_correct,
+            )
+
+            # 디버깅 출력
+            print("DIST:", distance_cm)
+            print("DEPTH:", rep_result.depth_now)
+            print("BPM:", rep_result.bpm)
+            print("VOICE:", repr(voice_feedback))
+
+            # TTS 출력
+            print("TTS CALL:", repr(voice_feedback))
+            tts.speak(voice_feedback)
+
+            # 화면 표시
+            if eval_result is not None:
                 draw_eval_result(frame, eval_result, distance_cm, rep_result)
+            else:
+                draw_pose_points(frame, landmarks)
+
+ main
+                draw_eval_result(frame, eval_result, distance_cm, rep_result)
+            else:
+                # 자세 인식이 안 되어도 초음파 관련 값은 화면에 표시
+                y = 30
+
+                if distance_cm is not None:
+                    cv2.putText(
+                        frame,
+                        f"DIST: {distance_cm:.1f} cm",
+                        (10, y),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (255, 255, 255),
+                        2,
+                    )
+                    y += 30
+
+                if rep_result.depth_now is not None:
+                    cv2.putText(
+                        frame,
+                        f"Depth: {rep_result.depth_now:.1f} cm",
+                        (10, y),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (255, 255, 255),
+                        2,
+                    )
+                    y += 30
+
+                if rep_result.bpm is not None:
+                    cv2.putText(
+                        frame,
+                        f"BPM: {rep_result.bpm:.1f}",
+                        (10, y),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (255, 255, 255),
+                        2,
+                    )
+                    y += 30
+
+                cv2.putText(
+                    frame,
+                    f"Count: {rep_result.count}",
+                    (10, y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 255, 255),
+                    2,
+                )
 
             cv2.putText(
                 frame,

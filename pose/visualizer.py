@@ -46,11 +46,12 @@ def draw_eval_result(
         lines.append((f"DIST: {distance_cm:.1f} cm", distance_color))
 
     if rep_result is not None:
-        if rep_result.depth_now is not None:
-            depth_color = COLOR_OK if 5.0 <= rep_result.depth_now <= 6.0 else COLOR_BAD
-            lines.append((f"Depth: {rep_result.depth_now:.1f} cm", depth_color))
+        if rep_result.peak_depth is not None:
+            depth_color = COLOR_OK if 5.0 <= rep_result.peak_depth <= 6.0 else COLOR_BAD
+            lines.append((f"Peak depth: {rep_result.peak_depth:.1f} cm", depth_color))
+            lines.append((f"Depth: {rep_result.depth_feedback}", depth_color))
         else:
-            lines.append(("Depth: calibrating", COLOR_INFO))
+            lines.append(("Depth: collecting", COLOR_INFO))
 
         if rep_result.bpm is not None:
             bpm_color = COLOR_OK if 100 <= rep_result.bpm <= 120 else COLOR_BAD
