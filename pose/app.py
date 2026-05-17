@@ -16,7 +16,7 @@ MAX_FRAME_FAILURES = 10
 def main() -> None:
     project_root = Path(__file__).resolve().parent
     model_path = project_root / "models" / "pose_landmarker_full.task"
-    
+
     if not model_path.exists():
         print(f"모델 파일을 찾을 수 없습니다: {model_path}")
         return
@@ -26,6 +26,7 @@ def main() -> None:
 
     # 아두이노 초음파 센서 연결
     ultrasonic = UltrasonicReader(port="COM3", baudrate=9600)
+
     rep_counter = RepCounter()
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
@@ -35,7 +36,7 @@ def main() -> None:
         return
 
     consecutive_failures = 0
-    
+
     try:
         while True:
             ret, frame = cap.read()
