@@ -8,8 +8,8 @@ def generate_voice_feedback(
     depth_cm: Optional[float],
     posture_correct: bool,
 ) -> str:
-    #if not posture_correct:
-    #    return "팔을 곧게 펴세요."
+    if not posture_correct:
+        return "팔을 곧게 펴세요."
 
     if depth_cm is None:
         return "압박 깊이를 측정 중입니다."
