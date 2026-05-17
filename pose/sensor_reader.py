@@ -3,7 +3,7 @@ import time
 
 
 class UltrasonicReader:
-    def __init__(self, port="COM3", baudrate=9600):
+    def __init__(self, port="COM13", baudrate=9600):
         self.ser = serial.Serial(port, baudrate, timeout=0.1)
         time.sleep(2)
         self.distance_cm = None
