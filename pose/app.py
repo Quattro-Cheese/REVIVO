@@ -8,6 +8,8 @@ from pose.detector import PoseDetector
 from pose.evaluator import HysteresisJudge, evaluate_pose
 from pose.visualizer import draw_eval_result, draw_pose_points
 from pose.sensor_reader import UltrasonicReader
+from pose.feedback_generator import generate_voice_feedback
+from pose.tts_speaker import TTSSpeaker
 from counter.rep_counter import RepCounter
 
 MAX_FRAME_FAILURES = 10
@@ -72,16 +74,9 @@ def main() -> None:
 
             # 초음파 센서 거리값 읽기
             distance_cm = ultrasonic.update()
- ugang-patch-6
 
             # RepCounter로 압박 깊이, count, BPM 계산
             timestamp_ms = int(time.monotonic() * 1000)
-
-            rep_result = rep_counter.update(
-                timestamp_ms=timestamp_ms,
-                signal_value=distance_cm,
-            )
- main
             rep_result = rep_counter.update(
                 timestamp_ms=timestamp_ms,
                 signal_value=distance_cm,
@@ -89,7 +84,6 @@ def main() -> None:
 
             # 자세 인식 성공 여부와 관계없이 초음파/TTS는 동작하게 처리
             if eval_result is not None:
- ugang-patch-6
                 posture_correct = eval_result.is_correct
             else:
                 posture_correct = True
@@ -97,8 +91,8 @@ def main() -> None:
             # TTS 피드백 문장 생성
             voice_feedback = generate_voice_feedback(
                 bpm=rep_result.bpm,
-                depth_cm=rep_result.depth_now,
-               posture_correct=posture_correct,
+                depth_cm=rep_result.peak_depth,
+                posture_correct=posture_correct,
             )
 
             # 디버깅 출력
@@ -113,11 +107,6 @@ def main() -> None:
 
             # 화면 표시
             if eval_result is not None:
-                draw_eval_result(frame, eval_result, distance_cm, rep_result)
-            else:
-                draw_pose_points(frame, landmarks)
-
- main
                 draw_eval_result(frame, eval_result, distance_cm, rep_result)
             else:
                 # 자세 인식이 안 되어도 초음파 관련 값은 화면에 표시
