@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime
+import csv
 import time
 import cv2
 
@@ -15,6 +17,57 @@ from counter.rep_counter import RepCounter
 MAX_FRAME_FAILURES = 10
 
 
+def draw_sensor_values(frame, distance_cm, rep_result) -> None:
+    """자세 인식이 실패해도 초음파/압박 관련 값을 화면에 표시한다."""
+    y = 30
+
+    if distance_cm is not None:
+        cv2.putText(
+            frame,
+            f"DIST: {distance_cm:.1f} cm",
+            (10, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2,
+        )
+        y += 30
+
+    if rep_result.depth_now is not None:
+        cv2.putText(
+            frame,
+            f"Depth: {rep_result.depth_now:.1f} cm",
+            (10, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2,
+        )
+        y += 30
+
+    if rep_result.bpm is not None:
+        cv2.putText(
+            frame,
+            f"BPM: {rep_result.bpm:.1f}",
+            (10, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2,
+        )
+        y += 30
+
+    cv2.putText(
+        frame,
+        f"Count: {rep_result.count}",
+        (10, y),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2,
+    )
+
+
 def main() -> None:
     project_root = Path(__file__).resolve().parent
     model_path = project_root / "models" / "pose_landmarker_full.task"
@@ -22,6 +75,28 @@ def main() -> None:
     if not model_path.exists():
         print(f"모델 파일을 찾을 수 없습니다: {model_path}")
         return
+
+    # CSV 로그 파일 생성
+    log_dir = project_root / "logs"
+    log_dir.mkdir(exist_ok=True)
+
+    log_path = log_dir / f"cpr_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    log_file = open(log_path, "w", newline="", encoding="utf-8-sig")
+    csv_writer = csv.writer(log_file)
+
+    csv_writer.writerow([
+        "wall_time",
+        "elapsed_ms",
+        "timestamp_ms",
+        "distance_cm",
+        "depth_cm",
+        "bpm",
+        "count",
+        "posture_correct",
+        "voice_feedback",
+    ])
+
+    print(f"CSV 로그 저장 경로: {log_path}")
 
     detector = PoseDetector(model_path=str(model_path))
     hysteresis = HysteresisJudge()
@@ -38,6 +113,7 @@ def main() -> None:
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("카메라를 열 수 없습니다.")
+        log_file.close()
         ultrasonic.close()
         detector.close()
         return
@@ -45,10 +121,12 @@ def main() -> None:
     tts.speak("시작합니다.")
 
     consecutive_failures = 0
+    start_timestamp_ms = int(time.monotonic() * 1000)
 
     try:
         while True:
             ret, frame = cap.read()
+
             if not ret:
                 consecutive_failures += 1
                 if consecutive_failures >= MAX_FRAME_FAILURES:
@@ -57,7 +135,6 @@ def main() -> None:
                 continue
 
             consecutive_failures = 0
-
             frame = cv2.flip(frame, 1)
 
             # 자세 추정
@@ -77,6 +154,8 @@ def main() -> None:
 
             # RepCounter로 압박 깊이, count, BPM 계산
             timestamp_ms = int(time.monotonic() * 1000)
+            elapsed_ms = timestamp_ms - start_timestamp_ms
+
             rep_result = rep_counter.update(
                 timestamp_ms=timestamp_ms,
                 signal_value=distance_cm,
@@ -95,10 +174,25 @@ def main() -> None:
                 posture_correct=posture_correct,
             )
 
+            # CSV 로그 저장
+            csv_writer.writerow([
+                datetime.now().isoformat(timespec="milliseconds"),
+                elapsed_ms,
+                timestamp_ms,
+                distance_cm,
+                rep_result.depth_now,
+                rep_result.bpm,
+                rep_result.count,
+                posture_correct,
+                voice_feedback,
+            ])
+            log_file.flush()
+
             # 디버깅 출력
             print("DIST:", distance_cm)
             print("DEPTH:", rep_result.depth_now)
             print("BPM:", rep_result.bpm)
+            print("COUNT:", rep_result.count)
             print("VOICE:", repr(voice_feedback))
 
             # TTS 출력
@@ -109,54 +203,7 @@ def main() -> None:
             if eval_result is not None:
                 draw_eval_result(frame, eval_result, distance_cm, rep_result)
             else:
-                # 자세 인식이 안 되어도 초음파 관련 값은 화면에 표시
-                y = 30
-
-                if distance_cm is not None:
-                    cv2.putText(
-                        frame,
-                        f"DIST: {distance_cm:.1f} cm",
-                        (10, y),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (255, 255, 255),
-                        2,
-                    )
-                    y += 30
-
-                if rep_result.depth_now is not None:
-                    cv2.putText(
-                        frame,
-                        f"Depth: {rep_result.depth_now:.1f} cm",
-                        (10, y),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (255, 255, 255),
-                        2,
-                    )
-                    y += 30
-
-                if rep_result.bpm is not None:
-                    cv2.putText(
-                        frame,
-                        f"BPM: {rep_result.bpm:.1f}",
-                        (10, y),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (255, 255, 255),
-                        2,
-                    )
-                    y += 30
-
-                cv2.putText(
-                    frame,
-                    f"Count: {rep_result.count}",
-                    (10, y),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (255, 255, 255),
-                    2,
-                )
+                draw_sensor_values(frame, distance_cm, rep_result)
 
             cv2.putText(
                 frame,
@@ -175,6 +222,7 @@ def main() -> None:
                 break
 
     finally:
+        log_file.close()
         ultrasonic.close()
         cap.release()
         detector.close()
