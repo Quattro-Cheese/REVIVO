@@ -170,7 +170,7 @@ def main() -> None:
             # TTS 피드백 문장 생성
             voice_feedback = generate_voice_feedback(
                 bpm=rep_result.bpm,
-                depth_cm=rep_result.depth_now,
+                depth_cm=rep_result.peak_depth,
                 posture_correct=posture_correct,
             )
 

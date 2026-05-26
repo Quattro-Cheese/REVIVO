@@ -118,7 +118,7 @@ class RepCounter:
         self._current_acceleration: Optional[float] = None
 
         # [수정] 가장 최근에 완료된 압박의 깊이 피드백.
-        self._last_depth_feedback = "깊이 수집중"
+        self._last_depth_feedback = "Depth collecting"
 
     def update(self, timestamp_ms: int, signal_value: Optional[float]) -> RepResult:
         if self._metronome_start_ms is None:
@@ -159,12 +159,12 @@ class RepCounter:
                 peak_depth=self._latest_peak_depth(),
                 count=self._count,
                 bpm=bpm,
-                rate_feedback="기준값 수집중",
+                rate_feedback="Baseline collecting",
                 metronome_bpm=self.target_bpm,
                 beat_now=self._beat_now(timestamp_ms),
                 velocity=None,
                 acceleration=None,
-                depth_feedback="기준값 수집중",
+                depth_feedback="Baseline collecting",
             )
 
         # 압박이 아닐 때 baseline을 천천히 보정
@@ -230,7 +230,7 @@ class RepCounter:
         self._prev_velocity = None
         self._current_velocity = None
         self._current_acceleration = None
-        self._last_depth_feedback = "깊이 수집중"
+        self._last_depth_feedback = "Depth collecting"
 
     def _calc_motion(self, timestamp_ms: int, depth_now: float) -> tuple[Optional[float], Optional[float]]:
         """
@@ -298,10 +298,10 @@ class RepCounter:
         [수정] 적정 깊이를 단일 임계값이 아닌 범위로 판정.
         """
         if peak_depth < self.target_depth_min_cm:
-            return "압박 얕음"
+            return "Too shallow"
         if peak_depth > self.target_depth_max_cm:
-            return "압박 깊음"
-        return "깊이 적절"
+            return "Too deep"
+        return "Good depth"
 
     def _calc_bpm(self) -> Optional[float]:
         if len(self._compression_times) < 2:
@@ -319,13 +319,13 @@ class RepCounter:
 
     def _rate_feedback(self, bpm: Optional[float]) -> str:
         if bpm is None:
-            return "리듬 수집중"
+            return "Rate collecting"
 
         if bpm < 100:
-            return "속도 느림"
+            return "Too slow"
         if bpm > 120:
-            return "속도 빠름"
-        return "속도 적절"
+            return "Too fast"
+        return "Good rate"
 
     def _latest_peak_depth(self) -> Optional[float]:
         if not self._peak_depths:

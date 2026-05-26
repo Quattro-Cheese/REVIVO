@@ -42,19 +42,18 @@ def draw_eval_result(
         lines.append((f"R elbow: {result.right_elbow_angle:.1f}deg", COLOR_INFO))
 
     if distance_cm is not None:
-        distance_color = COLOR_OK if 10 <= distance_cm <= 11 else COLOR_BAD
-        lines.append((f"DIST: {distance_cm:.1f} cm", distance_color))
+        lines.append((f"DIST: {distance_cm:.1f} cm", COLOR_INFO))
 
     if rep_result is not None:
         if rep_result.peak_depth is not None:
-            depth_color = COLOR_OK if 5.0 <= rep_result.peak_depth <= 6.0 else COLOR_BAD
+            depth_color = COLOR_OK if 4.5 <= rep_result.peak_depth <= 6.5 else COLOR_BAD
             lines.append((f"Peak depth: {rep_result.peak_depth:.1f} cm", depth_color))
             lines.append((f"Depth: {rep_result.depth_feedback}", depth_color))
         else:
             lines.append(("Depth: collecting", COLOR_INFO))
 
         if rep_result.bpm is not None:
-            bpm_color = COLOR_OK if 100 <= rep_result.bpm <= 120 else COLOR_BAD
+            bpm_color = COLOR_OK if 95 <= rep_result.bpm <= 125 else COLOR_BAD
             lines.append((f"BPM: {rep_result.bpm:.1f}", bpm_color))
         else:
             lines.append(("BPM: collecting", COLOR_INFO))
