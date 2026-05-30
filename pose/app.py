@@ -23,6 +23,37 @@ load_dotenv()
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 
+def login_and_get_user_id() -> int:
+    """실행 시 로그인해서 user_id 자동 획득"""
+    print("=== CPR 훈련 시스템 ===")
+    username = input("아이디: ").strip()
+    password = input("비밀번호: ").strip()
+
+    try:
+        res = requests.post(
+            f"{BACKEND_URL}/users/login",
+            data={"username": username, "password": password},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        if res.status_code != 200:
+            print("로그인 실패: 아이디 또는 비밀번호를 확인해주세요.")
+            exit(1)
+
+        token = res.json()["access_token"]
+
+        me = requests.get(
+            f"{BACKEND_URL}/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        user_id = me.json()["id"]
+        print(f"✅ {username}님 로그인 완료 (user_id: {user_id})")
+        return user_id
+
+    except Exception as e:
+        print(f"로그인 중 오류 발생: {e}")
+        exit(1)
+
+
 def save_session_to_db(
     user_id: int,
     avg_bpm: float,
@@ -100,6 +131,9 @@ def draw_sensor_values(frame, distance_cm, rep_result) -> None:
 
 
 def main() -> None:
+    # 로그인 먼저
+    user_id = login_and_get_user_id()
+
     project_root = Path(__file__).resolve().parent
     model_path = project_root / "models" / "pose_landmarker_full.task"
 
@@ -182,7 +216,7 @@ def main() -> None:
                 pose_result.visibilities,
                 hysteresis,
                 elbow_tracker=elbow_tracker,
-                in_compression=rep_result.in_compression,  # RepCounter 내부 상태
+                in_compression=rep_result.in_compression,
             )
 
             distance_cm = ultrasonic.update()
@@ -252,14 +286,12 @@ def main() -> None:
                 break
 
     finally:
-        # 리소스 정리
         log_file.close()
         ultrasonic.close()
         cap.release()
         detector.close()
         cv2.destroyAllWindows()
 
-        # 세션 통계 계산 및 DB 저장
         elapsed_total = (int(time.monotonic() * 1000) - start_timestamp_ms) / 1000.0
 
         try:
@@ -279,7 +311,7 @@ def main() -> None:
             )
 
             save_session_to_db(
-                user_id=1,  # 임시: 나중에 로그인 연동 후 실제 user_id로 교체
+                user_id=user_id,
                 avg_bpm=round(avg_bpm, 2),
                 avg_depth_cm=round(avg_depth, 2),
                 total_count=total_count,
