@@ -7,7 +7,9 @@ import time
 import cv2
 import requests
 import pandas as pd
+import os
 
+from dotenv import load_dotenv
 from pose.detector import PoseDetector
 from pose.evaluator import HysteresisJudge, evaluate_pose
 from pose.visualizer import draw_eval_result, draw_pose_points
@@ -18,6 +20,8 @@ from counter.rep_counter import RepCounter
 from pose.evaluator import HysteresisJudge, ElbowHoldTracker, evaluate_pose
 
 MAX_FRAME_FAILURES = 10
+load_dotenv()
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 
 def save_session_to_db(
@@ -30,7 +34,7 @@ def save_session_to_db(
 ) -> None:
     try:
         response = requests.post(
-            "http://localhost:8000/sessions/save",
+            f"{BACKEND_URL}/sessions/save",
             params={
                 "user_id": user_id,
                 "avg_bpm": avg_bpm,

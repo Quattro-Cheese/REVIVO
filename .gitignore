@@ -1,3 +1,13 @@
 pose/models/
 __pycache__/
 *.pyc
+
+!server/rag/guideline.index
+!server/rag/chunks.pkl
+!server/ml/rf_model.pkl
+!server/ml/mlp_model.pkl
+!server/ml/scaler.pkl
+!server/ml/feature_names.pkl
+
+.env
+.env.*
