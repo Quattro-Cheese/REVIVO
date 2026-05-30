@@ -11,13 +11,12 @@ import os
 
 from dotenv import load_dotenv
 from pose.detector import PoseDetector
-from pose.evaluator import HysteresisJudge, evaluate_pose
+from pose.evaluator import HysteresisJudge, ElbowHoldTracker, evaluate_pose
 from pose.visualizer import draw_eval_result, draw_pose_points
 from pose.sensor_reader import UltrasonicReader
 from pose.feedback_generator import generate_voice_feedback
 from pose.tts_speaker import TTSSpeaker
 from counter.rep_counter import RepCounter
-from pose.evaluator import HysteresisJudge, ElbowHoldTracker, evaluate_pose
 
 MAX_FRAME_FAILURES = 10
 load_dotenv()

@@ -39,17 +39,6 @@ def save_session(
     }
 
 
-@router.get("/{user_id}")
-def get_sessions(user_id: int, db: Session = Depends(get_db)):
-    sessions = (
-        db.query(models.Session)
-        .filter(models.Session.user_id == user_id)
-        .order_by(models.Session.created_at.desc())
-        .all()
-    )
-    return sessions
-
-
 # 세션 단건 조회
 @router.get("/detail/{session_id}")
 def get_session_detail(session_id: int, db: Session = Depends(get_db)):
@@ -86,3 +75,14 @@ def get_session_detail(session_id: int, db: Session = Depends(get_db)):
             else None
         ),
     }
+
+
+@router.get("/{user_id}")
+def get_sessions(user_id: int, db: Session = Depends(get_db)):
+    sessions = (
+        db.query(models.Session)
+        .filter(models.Session.user_id == user_id)
+        .order_by(models.Session.created_at.desc())
+        .all()
+    )
+    return sessions
