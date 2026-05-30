@@ -11,6 +11,7 @@ import {
   Legend,
 } from "recharts";
 import apiClient from "../api/client";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 interface SessionDetail {
   id: number;
@@ -39,12 +40,13 @@ export default function ReportPage() {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useCurrentUser();
 
   useEffect(() => {
     if (!sessionId) return;
     Promise.all([
       apiClient.get(`/sessions/detail/${sessionId}`),
-      apiClient.get(`/report/1`),
+      apiClient.get(`/report/${user?.id}`),
     ])
       .then(([detailRes, reportRes]) => {
         setDetail(detailRes.data);
