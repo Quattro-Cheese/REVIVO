@@ -22,9 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-<<<<<<< HEAD
 .vercel
 
-.env.*.env
-=======
->>>>>>> main
+.env.development
+.env.production
+.env
+

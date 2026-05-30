@@ -6,6 +6,7 @@ from ..rag.retriever import GuidelineRetriever
 import pickle
 import numpy as np
 from pathlib import Path
+import os
 
 router = APIRouter()
 
@@ -24,6 +25,8 @@ QUERY_MAP = {
     2: "CPR elbow posture locked arms technique",
     3: "CPR good performance guidelines",
 }
+
+USE_RAG = os.getenv("USE_RAG", "false").lower() == "true"
 
 
 @router.get("/{user_id}")
@@ -74,8 +77,14 @@ def generate_report(user_id: int, db: Session = Depends(get_db)):
     focus = LABEL_MAP[label]
 
     # RAG로 관련 가이드라인 검색
-    retriever = GuidelineRetriever()
-    guideline_chunks = retriever.search(QUERY_MAP[label], top_k=2)
+    if USE_RAG:
+        retriever = GuidelineRetriever()
+        guideline_chunks = retriever.search(QUERY_MAP[label], top_k=2)
+    else:
+        guideline_chunks = [
+            "AHA 2020 가이드라인: 성인 CPR 시 분당 100~120회 속도로 5~6cm 깊이로 압박합니다.",
+            "팔꿈치를 곧게 펴고 체중을 이용해 압박하세요.",
+        ]
 
     # 이전 세션과 비교
     trend = ""
