@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from .. import models
 from ..database import get_db
+from ..ml.trainer import train_model
 
 router = APIRouter()
 
@@ -27,7 +28,16 @@ def save_session(
     db.add(session)
     db.commit()
     db.refresh(session)
-    return {"message": "세션 저장 완료", "session_id": session.id}
+
+    # 세션 저장 후 자동 재학습
+    all_sessions = db.query(models.Session).all()
+    retrained = train_model(all_sessions)
+
+    return {
+        "message": "세션 저장 완료",
+        "session_id": session.id,
+        "model_retrained": retrained,
+    }
 
 
 @router.get("/{user_id}")

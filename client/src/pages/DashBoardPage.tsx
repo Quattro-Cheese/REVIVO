@@ -18,6 +18,7 @@ import {
   Legend,
 } from "recharts";
 import apiClient from "../api/client";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 interface PredictData {
   focus: string;
@@ -43,22 +44,46 @@ interface ReportData {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const username = localStorage.getItem("username");
+  const { user, loading: userLoading } = useCurrentUser();
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [predict, setPredict] = useState<PredictData | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
 
   useEffect(() => {
-    apiClient.get("/sessions/1").then((res) => setSessions(res.data));
+    if (!user) return; // user 로드 전엔 호출 안 함
+    apiClient.get(`/sessions/${user.id}`).then((res) => setSessions(res.data));
     apiClient
-      .get("/predict/1")
+      .get(`/predict/${user.id}`)
       .then((res) => setPredict(res.data))
       .catch(() => {});
     apiClient
-      .get("/report/1")
+      .get(`/report/${user.id}`)
       .then((res) => setReport(res.data))
       .catch(() => {});
-  }, []);
+  }, [user]); // user 바뀔 때마다 재호출
+
+  // 로딩 중 화면
+  if (userLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          background: "#FAFAFA",
+        }}
+      >
+        <p style={{ color: "#64748B", fontSize: 14 }}>불러오는 중...</p>
+      </div>
+    );
+  }
+
+  // user 없으면 로그인으로
+  if (!user) {
+    navigate("/login");
+    return null;
+  }
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -111,7 +136,8 @@ export default function DashboardPage() {
             <span style={s.badgeText}>CPR Training</span>
           </div>
           <h1 style={s.pageTitle}>
-            {username}님의 <span style={s.gradientText}>훈련 대시보드</span>
+            {user.username}님의{" "}
+            <span style={s.gradientText}>훈련 대시보드</span>
           </h1>
           <p style={s.pageSub}>
             누적 {sessions.length}회 훈련
@@ -302,7 +328,7 @@ export default function DashboardPage() {
                     strokeWidth={2}
                     dot={{ fill: "#0052FF", r: 4 }}
                   />
-                  <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />1
+                  <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>

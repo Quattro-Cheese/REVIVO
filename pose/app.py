@@ -15,6 +15,7 @@ from pose.sensor_reader import UltrasonicReader
 from pose.feedback_generator import generate_voice_feedback
 from pose.tts_speaker import TTSSpeaker
 from counter.rep_counter import RepCounter
+from pose.evaluator import HysteresisJudge, ElbowHoldTracker, evaluate_pose
 
 MAX_FRAME_FAILURES = 10
 
@@ -121,6 +122,8 @@ def main() -> None:
             "bpm",
             "count",
             "posture_correct",
+            "shoulder_vertical",
+            "elbow_hold_ratio",
             "voice_feedback",
         ]
     )
@@ -129,12 +132,17 @@ def main() -> None:
 
     detector = PoseDetector(model_path=str(model_path))
     hysteresis = HysteresisJudge()
+    elbow_tracker = ElbowHoldTracker()
 
     ultrasonic = UltrasonicReader(port="COM12", baudrate=9600)
     rep_counter = RepCounter(target_bpm=120)
     tts = TTSSpeaker(interval_sec=1.0)
 
     cap = cv2.VideoCapture(0)
+    rep_result = rep_counter.update(
+        timestamp_ms=int(time.monotonic() * 1000), signal_value=None
+    )
+
     if not cap.isOpened():
         print("카메라를 열 수 없습니다.")
         log_file.close()
@@ -170,6 +178,8 @@ def main() -> None:
                 pose_result.frame_height,
                 pose_result.visibilities,
                 hysteresis,
+                elbow_tracker=elbow_tracker,
+                in_compression=rep_result.in_compression,  # RepCounter 내부 상태
             )
 
             distance_cm = ultrasonic.update()
@@ -203,6 +213,8 @@ def main() -> None:
                     rep_result.bpm,
                     rep_result.count,
                     posture_correct,
+                    eval_result.shoulder_vertical if eval_result else None,
+                    eval_result.elbow_hold_ratio if eval_result else None,
                     voice_feedback,
                 ]
             )

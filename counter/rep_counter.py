@@ -31,6 +31,7 @@ class RepResult:
     # [수정] 한 회 압박이 끝났을 때 peak_depth가 5~6cm 범위인지 판정한 결과.
     # 기존에는 threshold 한 값만 넘으면 카운트했지만, 이제 CPR 적정 깊이 범위를 따로 피드백함.
     depth_feedback: str
+    in_compression: bool = False
 
 
 class RepCounter:
@@ -55,12 +56,10 @@ class RepCounter:
         release_threshold_cm: float = 1.2,
         refractory_ms: int = 280,
         target_bpm: int = 110,
-
         # [수정] CPR 적정 압박 깊이를 "하나의 값"이 아니라 "범위"로 둠.
         # 교수님 피드백: 임계값도 한 값이 아닌 범위로 바꿀 것.
         target_depth_min_cm: float = 5.0,
         target_depth_max_cm: float = 6.0,
-
         # [수정] 순간 튐값 방지를 위한 작은 구간 median filter 크기.
         # 60Hz로 들어오는 초음파 센서값 중 노이즈 하나가 최저점으로 잡히는 문제를 줄임.
         depth_window_size: int = 5,
@@ -70,7 +69,9 @@ class RepCounter:
         if depth_window_size <= 0:
             raise ValueError("depth_window_size must be greater than 0")
         if enter_threshold_cm <= release_threshold_cm:
-            raise ValueError("enter_threshold_cm must be greater than release_threshold_cm")
+            raise ValueError(
+                "enter_threshold_cm must be greater than release_threshold_cm"
+            )
         if refractory_ms < 0:
             raise ValueError("refractory_ms must be greater than or equal to 0")
         if target_bpm <= 0:
@@ -78,7 +79,9 @@ class RepCounter:
         if target_depth_min_cm <= 0 or target_depth_max_cm <= 0:
             raise ValueError("target depth range must be greater than 0")
         if target_depth_min_cm > target_depth_max_cm:
-            raise ValueError("target_depth_min_cm must be less than or equal to target_depth_max_cm")
+            raise ValueError(
+                "target_depth_min_cm must be less than or equal to target_depth_max_cm"
+            )
 
         self.calibration_samples = calibration_samples
         self.enter_threshold_cm = enter_threshold_cm
@@ -143,6 +146,7 @@ class RepCounter:
                 velocity=self._current_velocity,
                 acceleration=self._current_acceleration,
                 depth_feedback=self._last_depth_feedback,
+                in_compression=self._in_compression,
             )
 
         if self._baseline is None:
@@ -165,6 +169,7 @@ class RepCounter:
                 velocity=None,
                 acceleration=None,
                 depth_feedback="Baseline collecting",
+                in_compression=self._in_compression,
             )
 
         # 압박이 아닐 때 baseline을 천천히 보정
@@ -208,6 +213,7 @@ class RepCounter:
             velocity=velocity,
             acceleration=acceleration,
             depth_feedback=self._last_depth_feedback,
+            in_compression=self._in_compression,
         )
 
     def reset(self) -> None:
@@ -232,7 +238,9 @@ class RepCounter:
         self._current_acceleration = None
         self._last_depth_feedback = "Depth collecting"
 
-    def _calc_motion(self, timestamp_ms: int, depth_now: float) -> tuple[Optional[float], Optional[float]]:
+    def _calc_motion(
+        self, timestamp_ms: int, depth_now: float
+    ) -> tuple[Optional[float], Optional[float]]:
         """
         [수정] 깊이 변화속도와 가속도를 계산하는 함수 추가.
         - velocity 단위: cm/s
