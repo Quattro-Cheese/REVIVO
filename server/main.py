@@ -1,16 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
-from .routers import users, sessions
+from .routers import users, sessions, predict  # predict 추가
 
-Base.metadata.create_all(bind=engine)  # 테이블 자동 생성
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# React에서 접근할 수 있도록 CORS 허용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # React 개발서버 주소
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -18,8 +17,4 @@ app.add_middleware(
 
 app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
-
-
-@app.get("/")
-def root():
-    return {"message": "CPR Training API"}
+app.include_router(predict.router, prefix="/predict", tags=["predict"])  # 추가

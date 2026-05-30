@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../api/client";
 
+interface PredictData {
+  focus: string;
+  confidence: number;
+  session_count: number;
+}
+
 interface SessionData {
   id: number;
   created_at: string;
@@ -16,10 +22,15 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const username = localStorage.getItem("username");
   const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [predict, setPredict] = useState<PredictData | null>(null);
 
+  // useEffect 하나로 통합
   useEffect(() => {
-    // 임시: user_id=1 로 조회 (추후 토큰에서 user_id 파싱으로 개선)
     apiClient.get("/sessions/1").then((res) => setSessions(res.data));
+    apiClient
+      .get("/predict/1")
+      .then((res) => setPredict(res.data))
+      .catch(() => {});
   }, []);
 
   const handleLogout = () => {
@@ -36,6 +47,17 @@ export default function DashboardPage() {
           로그아웃
         </button>
       </div>
+
+      {predict && (
+        <div style={styles.predictCard}>
+          <p style={styles.predictTitle}>🎯 다음 훈련 집중 항목</p>
+          <p style={styles.predictFocus}>{predict.focus}</p>
+          <p style={styles.predictSub}>
+            신뢰도 {predict.confidence}% · 누적 {predict.session_count}회 훈련
+            기반
+          </p>
+        </div>
+      )}
 
       {sessions.length === 0 ? (
         <p style={styles.empty}>아직 훈련 기록이 없습니다.</p>
@@ -129,4 +151,20 @@ const styles: Record<string, React.CSSProperties> = {
   row: { display: "flex", justifyContent: "space-between" },
   label: { color: "#aaaaaa", fontSize: "14px" },
   value: { color: "#ffffff", fontWeight: "bold" },
+  predictCard: {
+    backgroundColor: "#0d2137",
+    borderRadius: "12px",
+    padding: "24px",
+    border: "1px solid #00e5a0",
+    marginBottom: "24px",
+    textAlign: "center" as const,
+  },
+  predictTitle: { color: "#aaaaaa", fontSize: "13px", margin: "0 0 8px 0" },
+  predictFocus: {
+    color: "#00e5a0",
+    fontSize: "22px",
+    fontWeight: "bold",
+    margin: "0 0 8px 0",
+  },
+  predictSub: { color: "#aaaaaa", fontSize: "12px", margin: 0 },
 };
