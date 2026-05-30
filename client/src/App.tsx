@@ -3,6 +3,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashBoardPage";
 import PrivateRoute from "./components/PrivateRoute";
+import ReportPage from "./pages/ReportPage";
 
 export default function App() {
   return (
@@ -15,6 +16,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <DashboardPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/report/:sessionId"
+          element={
+            <PrivateRoute>
+              <ReportPage />
             </PrivateRoute>
           }
         />

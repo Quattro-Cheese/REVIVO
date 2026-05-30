@@ -357,7 +357,11 @@ export default function DashboardPage() {
         </div>
         <div style={s.sessionGrid}>
           {sessions.map((session) => (
-            <div key={session.id} style={s.sessionCard}>
+            <div
+              key={session.id}
+              style={s.sessionCard}
+              onClick={() => navigate(`/report/${session.id}`)}
+            >
               <p style={s.sessionDate}>
                 {new Date(session.created_at).toLocaleString("ko-KR")}
               </p>
@@ -664,6 +668,8 @@ const s: Record<string, React.CSSProperties> = {
     border: "1px solid #E2E8F0",
     borderRadius: 12,
     padding: "1rem",
+    cursor: "pointer",
+    transition: "all 0.2s",
   },
   sessionDate: { fontSize: 11, color: "#94A3B8", marginBottom: 10 },
   sessionRow: {
