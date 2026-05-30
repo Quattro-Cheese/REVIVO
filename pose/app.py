@@ -5,6 +5,8 @@ from datetime import datetime
 import csv
 import time
 import cv2
+import requests
+import pandas as pd
 
 from pose.detector import PoseDetector
 from pose.evaluator import HysteresisJudge, evaluate_pose
@@ -13,8 +15,34 @@ from pose.sensor_reader import UltrasonicReader
 from pose.feedback_generator import generate_voice_feedback
 from pose.tts_speaker import TTSSpeaker
 from counter.rep_counter import RepCounter
+from pose.evaluator import HysteresisJudge, ElbowHoldTracker, evaluate_pose
 
 MAX_FRAME_FAILURES = 10
+
+
+def save_session_to_db(
+    user_id: int,
+    avg_bpm: float,
+    avg_depth_cm: float,
+    total_count: int,
+    posture_correct_ratio: float,
+    duration_sec: float,
+) -> None:
+    try:
+        response = requests.post(
+            "http://localhost:8000/sessions/save",
+            params={
+                "user_id": user_id,
+                "avg_bpm": avg_bpm,
+                "avg_depth_cm": avg_depth_cm,
+                "total_count": total_count,
+                "posture_correct_ratio": posture_correct_ratio,
+                "duration_sec": duration_sec,
+            },
+        )
+        print("세션 저장 완료:", response.json())
+    except Exception as e:
+        print("세션 저장 실패:", e)
 
 
 def draw_sensor_values(frame, distance_cm, rep_result) -> None:
@@ -84,33 +112,37 @@ def main() -> None:
     log_file = open(log_path, "w", newline="", encoding="utf-8-sig")
     csv_writer = csv.writer(log_file)
 
-    csv_writer.writerow([
-        "wall_time",
-        "elapsed_ms",
-        "timestamp_ms",
-        "distance_cm",
-        "depth_cm",
-        "bpm",
-        "count",
-        "posture_correct",
-        "voice_feedback",
-    ])
+    csv_writer.writerow(
+        [
+            "wall_time",
+            "elapsed_ms",
+            "timestamp_ms",
+            "distance_cm",
+            "depth_cm",
+            "bpm",
+            "count",
+            "posture_correct",
+            "shoulder_vertical",
+            "elbow_hold_ratio",
+            "voice_feedback",
+        ]
+    )
 
     print(f"CSV 로그 저장 경로: {log_path}")
 
     detector = PoseDetector(model_path=str(model_path))
     hysteresis = HysteresisJudge()
+    elbow_tracker = ElbowHoldTracker()
 
-    # 아두이노 초음파 센서 연결
     ultrasonic = UltrasonicReader(port="COM12", baudrate=9600)
-
-    # CPR 압박 횟수, 깊이, BPM 계산
     rep_counter = RepCounter(target_bpm=120)
-
-    # TTS 음성 안내
     tts = TTSSpeaker(interval_sec=1.0)
 
     cap = cv2.VideoCapture(0)
+    rep_result = rep_counter.update(
+        timestamp_ms=int(time.monotonic() * 1000), signal_value=None
+    )
+
     if not cap.isOpened():
         print("카메라를 열 수 없습니다.")
         log_file.close()
@@ -137,7 +169,6 @@ def main() -> None:
             consecutive_failures = 0
             frame = cv2.flip(frame, 1)
 
-            # 자세 추정
             pose_result = detector.detect(frame)
             draw_pose_points(frame, pose_result.image_landmarks)
 
@@ -147,12 +178,12 @@ def main() -> None:
                 pose_result.frame_height,
                 pose_result.visibilities,
                 hysteresis,
+                elbow_tracker=elbow_tracker,
+                in_compression=rep_result.in_compression,  # RepCounter 내부 상태
             )
 
-            # 초음파 센서 거리값 읽기
             distance_cm = ultrasonic.update()
 
-            # RepCounter로 압박 깊이, count, BPM 계산
             timestamp_ms = int(time.monotonic() * 1000)
             elapsed_ms = timestamp_ms - start_timestamp_ms
 
@@ -161,45 +192,42 @@ def main() -> None:
                 signal_value=distance_cm,
             )
 
-            # 자세 인식 성공 여부와 관계없이 초음파/TTS는 동작하게 처리
             if eval_result is not None:
                 posture_correct = eval_result.is_correct
             else:
                 posture_correct = True
 
-            # TTS 피드백 문장 생성
             voice_feedback = generate_voice_feedback(
                 bpm=rep_result.bpm,
                 depth_cm=rep_result.peak_depth,
                 posture_correct=posture_correct,
             )
 
-            # CSV 로그 저장
-            csv_writer.writerow([
-                datetime.now().isoformat(timespec="milliseconds"),
-                elapsed_ms,
-                timestamp_ms,
-                distance_cm,
-                rep_result.depth_now,
-                rep_result.bpm,
-                rep_result.count,
-                posture_correct,
-                voice_feedback,
-            ])
+            csv_writer.writerow(
+                [
+                    datetime.now().isoformat(timespec="milliseconds"),
+                    elapsed_ms,
+                    timestamp_ms,
+                    distance_cm,
+                    rep_result.depth_now,
+                    rep_result.bpm,
+                    rep_result.count,
+                    posture_correct,
+                    eval_result.shoulder_vertical if eval_result else None,
+                    eval_result.elbow_hold_ratio if eval_result else None,
+                    voice_feedback,
+                ]
+            )
             log_file.flush()
 
-            # 디버깅 출력
             print("DIST:", distance_cm)
             print("DEPTH:", rep_result.depth_now)
             print("BPM:", rep_result.bpm)
             print("COUNT:", rep_result.count)
             print("VOICE:", repr(voice_feedback))
-
-            # TTS 출력
             print("TTS CALL:", repr(voice_feedback))
             tts.speak(voice_feedback)
 
-            # 화면 표시
             if eval_result is not None:
                 draw_eval_result(frame, eval_result, distance_cm, rep_result)
             else:
@@ -217,16 +245,46 @@ def main() -> None:
 
             cv2.imshow("CPR Pose Estimation", frame)
 
-            # ESC 키 누르면 종료
             if cv2.waitKey(1) & 0xFF == 27:
                 break
 
     finally:
+        # 리소스 정리
         log_file.close()
         ultrasonic.close()
         cap.release()
         detector.close()
         cv2.destroyAllWindows()
+
+        # 세션 통계 계산 및 DB 저장
+        elapsed_total = (int(time.monotonic() * 1000) - start_timestamp_ms) / 1000.0
+
+        try:
+            df = pd.read_csv(log_path)
+
+            avg_bpm = float(df["bpm"].dropna().mean()) if "bpm" in df.columns else 0.0
+            avg_depth = (
+                float(df["depth_cm"].dropna().mean())
+                if "depth_cm" in df.columns
+                else 0.0
+            )
+            total_count = int(df["count"].max()) if "count" in df.columns else 0
+            posture_ratio = (
+                float(df["posture_correct"].sum() / len(df))
+                if "posture_correct" in df.columns and len(df) > 0
+                else 0.0
+            )
+
+            save_session_to_db(
+                user_id=1,  # 임시: 나중에 로그인 연동 후 실제 user_id로 교체
+                avg_bpm=round(avg_bpm, 2),
+                avg_depth_cm=round(avg_depth, 2),
+                total_count=total_count,
+                posture_correct_ratio=round(posture_ratio, 2),
+                duration_sec=round(elapsed_total, 2),
+            )
+        except Exception as e:
+            print("세션 통계 계산 실패:", e)
 
 
 if __name__ == "__main__":

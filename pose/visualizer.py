@@ -4,6 +4,7 @@ import cv2
 
 from pose.evaluator import PoseEvalResult
 from counter.rep_counter import RepResult
+
 # 화면에 표시할 landmark 인덱스 (어깨·팔꿈치·손목만 표시, 얼굴 등 불필요한 점 제외)
 _DRAW_INDICES = {11, 12, 13, 14, 15, 16}
 
@@ -60,6 +61,14 @@ def draw_eval_result(
 
         lines.append((f"Count: {rep_result.count}", COLOR_INFO))
         lines.append((f"Rate: {rep_result.rate_feedback}", COLOR_INFO))
+
+    if result.shoulder_feedback:
+        shoulder_color = COLOR_OK if result.shoulder_vertical else COLOR_BAD
+        lines.append((result.shoulder_feedback, shoulder_color))
+
+    if result.elbow_hold_feedback:
+        hold_color = COLOR_OK if (result.elbow_hold_ratio or 0) >= 0.8 else COLOR_BAD
+        lines.append((result.elbow_hold_feedback, hold_color))
 
     lines.append((result.feedback, color))
 
