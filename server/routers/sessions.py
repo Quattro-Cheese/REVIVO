@@ -77,6 +77,16 @@ def get_session_detail(session_id: int, db: Session = Depends(get_db)):
     }
 
 
+@router.delete("/{session_id}")
+def delete_session(session_id: int, db: Session = Depends(get_db)):
+    session = db.query(models.Session).filter(models.Session.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+    db.delete(session)
+    db.commit()
+    return {"message": "세션 삭제 완료", "session_id": session_id}
+
+
 @router.get("/{user_id}")
 def get_sessions(user_id: int, db: Session = Depends(get_db)):
     sessions = (
