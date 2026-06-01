@@ -43,17 +43,17 @@ export default function ReportPage() {
   const { user } = useCurrentUser();
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || !user) return;
     Promise.all([
       apiClient.get(`/sessions/detail/${sessionId}`),
-      apiClient.get(`/report/${user?.id}`),
+      apiClient.get(`/report/${user.id}`),
     ])
       .then(([detailRes, reportRes]) => {
         setDetail(detailRes.data);
         setReport(reportRes.data);
       })
       .finally(() => setLoading(false));
-  }, [sessionId]);
+  }, [sessionId, user]);
 
   if (loading) {
     return (
