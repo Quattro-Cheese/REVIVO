@@ -53,7 +53,7 @@ class RepCounter:
         self,
         calibration_samples: int = 15,
         enter_threshold_cm: float = 4.0,
-        release_threshold_cm: float = 1.2,
+        release_threshold_cm: float = 2.0,
         refractory_ms: int = 280,
         target_bpm: int = 110,
         # [수정] CPR 적정 압박 깊이를 "하나의 값"이 아니라 "범위"로 둠.

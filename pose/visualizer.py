@@ -46,6 +46,9 @@ def draw_eval_result(
         lines.append((f"DIST: {distance_cm:.1f} cm", COLOR_INFO))
 
     if rep_result is not None:
+        if rep_result.depth_now is not None:
+            lines.append((f"Depth now: {rep_result.depth_now:.1f} cm", COLOR_INFO))
+
         if rep_result.peak_depth is not None:
             depth_color = COLOR_OK if 4.5 <= rep_result.peak_depth <= 6.5 else COLOR_BAD
             lines.append((f"Peak depth: {rep_result.peak_depth:.1f} cm", depth_color))
