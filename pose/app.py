@@ -203,7 +203,7 @@ def main() -> None:
     elbow_tracker = ElbowHoldTracker()
 
     ultrasonic = UltrasonicReader(port="COM12", baudrate=9600)
-    rep_counter = RepCounter(target_bpm=120)
+    rep_counter = RepCounter(target_bpm=120, depth_scale=0.5)
     tts = TTSSpeaker(interval_sec=1.0)
 
     # 최근 BPM 값을 저장하는 버퍼
