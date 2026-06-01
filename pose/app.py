@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from datetime import datetime
+from collections import deque
+from typing import Optional
 import csv
 import time
 import cv2
@@ -19,6 +21,10 @@ from pose.tts_speaker import TTSSpeaker
 from counter.rep_counter import RepCounter
 
 MAX_FRAME_FAILURES = 10
+
+# 속도 피드백은 순간 BPM이 아니라 최근 구간 평균 BPM으로 판단
+BPM_SMOOTHING_WINDOW_MS = 1000
+
 load_dotenv()
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
@@ -77,6 +83,29 @@ def save_session_to_db(
         print("세션 저장 완료:", response.json())
     except Exception as e:
         print("세션 저장 실패:", e)
+
+
+def update_smoothed_bpm(
+    bpm_history,
+    timestamp_ms: int,
+    bpm: Optional[float],
+) -> Optional[float]:
+    """
+    순간 BPM 대신 최근 일정 시간 동안의 평균 BPM을 계산한다.
+    이렇게 하면 찰나의 속도 변화 때문에 잘못된 TTS가 나오는 문제를 줄일 수 있다.
+    """
+    if bpm is not None:
+        bpm_history.append((timestamp_ms, bpm))
+
+    cutoff_ms = timestamp_ms - BPM_SMOOTHING_WINDOW_MS
+
+    while bpm_history and bpm_history[0][0] < cutoff_ms:
+        bpm_history.popleft()
+
+    if not bpm_history:
+        return None
+
+    return sum(value for _, value in bpm_history) / len(bpm_history)
 
 
 def draw_sensor_values(frame, distance_cm, rep_result) -> None:
@@ -158,6 +187,7 @@ def main() -> None:
             "depth_cm",
             "peak_depth_cm",
             "bpm",
+            "smoothed_bpm",
             "count",
             "posture_correct",
             "shoulder_vertical",
@@ -176,9 +206,13 @@ def main() -> None:
     rep_counter = RepCounter(target_bpm=120)
     tts = TTSSpeaker(interval_sec=1.0)
 
+    # 최근 BPM 값을 저장하는 버퍼
+    bpm_history = deque()
+
     cap = cv2.VideoCapture(0)
     rep_result = rep_counter.update(
-        timestamp_ms=int(time.monotonic() * 1000), signal_value=None
+        timestamp_ms=int(time.monotonic() * 1000),
+        signal_value=None,
     )
 
     if not cap.isOpened():
@@ -230,13 +264,21 @@ def main() -> None:
                 signal_value=distance_cm,
             )
 
+            # 순간 BPM이 아니라 최근 1초 평균 BPM 계산
+            smoothed_bpm = update_smoothed_bpm(
+                bpm_history=bpm_history,
+                timestamp_ms=timestamp_ms,
+                bpm=rep_result.bpm,
+            )
+
             if eval_result is not None:
                 posture_correct = eval_result.is_correct
             else:
                 posture_correct = True
 
+            # TTS 피드백은 순간 bpm 대신 smoothed_bpm 사용
             voice_feedback = generate_voice_feedback(
-                bpm=rep_result.bpm,
+                bpm=smoothed_bpm,
                 depth_cm=rep_result.peak_depth,
                 posture_correct=posture_correct,
             )
@@ -250,6 +292,7 @@ def main() -> None:
                     rep_result.depth_now,
                     rep_result.peak_depth,
                     rep_result.bpm,
+                    smoothed_bpm,
                     rep_result.count,
                     posture_correct,
                     eval_result.shoulder_vertical if eval_result else None,
@@ -262,9 +305,12 @@ def main() -> None:
             print("DIST:", distance_cm)
             print("DEPTH:", rep_result.depth_now)
             print("BPM:", rep_result.bpm)
+            print("SMOOTHED BPM:", smoothed_bpm)
             print("COUNT:", rep_result.count)
             print("VOICE:", repr(voice_feedback))
             print("TTS CALL:", repr(voice_feedback))
+
+            # tts_speaker.py에서 interval_sec 기준으로 너무 자주 말하는 것은 자동 제한
             tts.speak(voice_feedback)
 
             if eval_result is not None:
@@ -301,10 +347,13 @@ def main() -> None:
 
             avg_bpm = float(df["bpm"].dropna().mean()) if "bpm" in df.columns else 0.0
             avg_depth = (
-                float(df["depth_cm"].dropna().mean())
-                if "depth_cm" in df.columns
-                else 0.0
-            )
+    float(df["peak_depth_cm"].dropna().mean())   # 압박별 최고 깊이 평균
+    if "peak_depth_cm" in df.columns and df["peak_depth_cm"].dropna().any()
+    else float(df["depth_cm"].dropna().mean())   # fallback
+    if "depth_cm" in df.columns
+    else 0.0
+)
+
             total_count = int(df["count"].max()) if "count" in df.columns else 0
             posture_ratio = (
                 float(df["posture_correct"].sum() / len(df))
