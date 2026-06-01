@@ -9,46 +9,95 @@ def generate_voice_feedback(
     posture_correct: bool,
 ) -> str:
     """
-    여러 문제가 동시에 발생했을 때,
-    문제를 모두 수집한 뒤 우선순위가 높은 피드백을 최대 2개까지 반환한다.
+    여러 문제가 동시에 발생했을 때 모든 문제를 반영하되,
+    TTS 시간이 길어지지 않도록 짧은 문장으로 압축한다.
 
-    우선순위:
-    1. 자세 문제
-    2. 깊이 문제
-    3. 속도 문제
+    - 문제 1개: 해당 피드백 출력
+    - 문제 2개: 두 피드백을 짧게 결합
+    - 문제 3개: 종합 피드백 출력
     """
 
-    issues: list[tuple[int, str]] = []
+    posture_issue = False
+    depth_issue = ""
+    speed_issue = ""
 
-    # 1순위: 자세 문제
+    # 자세 문제
     if not posture_correct:
-        issues.append((1, "팔을 곧게 펴세요."))
+        posture_issue = True
 
-    # 2순위: 압박 깊이 문제
+    # 깊이 문제
     if depth_cm is not None:
         if depth_cm < 5.0:
-            issues.append((2, "더 깊게 압박하세요."))
+            depth_issue = "shallow"
         elif depth_cm > 6.0:
-            issues.append((2, "힘을 조금 줄이세요."))
+            depth_issue = "deep"
 
-    # 3순위: 압박 속도 문제
+    # 속도 문제
     if bpm is not None:
         if bpm < 100:
-            issues.append((3, "조금 더 빠르게 압박하세요."))
+            speed_issue = "slow"
         elif bpm > 120:
-            issues.append((3, "속도가 빠릅니다."))
+            speed_issue = "fast"
 
-    # 문제가 없으면 음성 출력 없음
+    issues = []
+
+    if posture_issue:
+        issues.append("posture")
+
+    if depth_issue:
+        issues.append("depth")
+
+    if speed_issue:
+        issues.append("speed")
+
+    # 문제가 없으면 출력 없음
     if not issues:
         return ""
 
-    # 우선순위 기준 정렬
-    issues.sort(key=lambda x: x[0])
+    # 문제가 3개 이상이면 짧은 종합 피드백
+    if len(issues) >= 3:
+        return "팔, 깊이, 속도를 함께 조정하세요."
 
-    # 한 번에 너무 많은 말을 하지 않도록 최대 2개까지만 안내
-    selected_issues = issues[:2]
+    # 문제가 2개인 경우
+    if len(issues) == 2:
+        if posture_issue and depth_issue == "shallow":
+            return "팔을 펴고, 더 깊게 압박하세요."
 
-    # 문장만 추출해서 하나의 TTS 문장으로 합치기
-    feedback_messages = [message for _, message in selected_issues]
+        if posture_issue and depth_issue == "deep":
+            return "팔을 펴고, 힘을 조금 줄이세요."
 
-    return " ".join(feedback_messages)
+        if posture_issue and speed_issue == "fast":
+            return "팔을 펴고, 속도를 줄이세요."
+
+        if posture_issue and speed_issue == "slow":
+            return "팔을 펴고, 조금 더 빠르게 압박하세요."
+
+        if depth_issue == "shallow" and speed_issue == "fast":
+            return "더 깊게, 조금 천천히 압박하세요."
+
+        if depth_issue == "shallow" and speed_issue == "slow":
+            return "더 깊고 빠르게 압박하세요."
+
+        if depth_issue == "deep" and speed_issue == "fast":
+            return "힘을 줄이고, 속도를 낮추세요."
+
+        if depth_issue == "deep" and speed_issue == "slow":
+            return "힘은 줄이고, 조금 더 빠르게 압박하세요."
+
+    # 문제가 1개인 경우
+    if posture_issue:
+        return "팔을 곧게 펴세요."
+
+    if depth_issue == "shallow":
+        return "더 깊게 압박하세요."
+
+    if depth_issue == "deep":
+        return "힘을 조금 줄이세요."
+
+    if speed_issue == "slow":
+        return "조금 더 빠르게 압박하세요."
+
+    if speed_issue == "fast":
+        return "속도가 빠릅니다."
+
+    return ""
