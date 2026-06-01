@@ -62,6 +62,8 @@ class RepCounter:
         target_depth_min_cm: float = 5.0,
         target_depth_max_cm: float = 6.0,
         depth_scale: float = 1.0,
+        min_signal_cm: float = 2.0,
+        max_signal_cm: float = 40.0,
         # [수정] 순간 튐값 방지를 위한 작은 구간 median filter 크기.
         # 60Hz로 들어오는 초음파 센서값 중 노이즈 하나가 최저점으로 잡히는 문제를 줄임.
         depth_window_size: int = 5,
@@ -88,6 +90,8 @@ class RepCounter:
             )
         if depth_scale <= 0:
             raise ValueError("depth_scale must be greater than 0")
+        if min_signal_cm >= max_signal_cm:
+            raise ValueError("min_signal_cm must be less than max_signal_cm")
 
         self.calibration_samples = calibration_samples
         self.enter_threshold_cm = enter_threshold_cm
@@ -100,6 +104,8 @@ class RepCounter:
         self.target_depth_min_cm = target_depth_min_cm
         self.target_depth_max_cm = target_depth_max_cm
         self.depth_scale = depth_scale
+        self.min_signal_cm = min_signal_cm
+        self.max_signal_cm = max_signal_cm
 
         self._baseline_buffer: deque[float] = deque(maxlen=calibration_samples)
         self._baseline: Optional[float] = None
@@ -135,7 +141,11 @@ class RepCounter:
         if self._metronome_start_ms is None:
             self._metronome_start_ms = timestamp_ms
 
-        if signal_value is not None and not isfinite(signal_value):
+        if signal_value is not None and (
+            not isfinite(signal_value)
+            or signal_value < self.min_signal_cm
+            or signal_value > self.max_signal_cm
+        ):
             signal_value = None
 
         if signal_value is None:
@@ -181,7 +191,10 @@ class RepCounter:
             )
 
         # 압박이 아닐 때 baseline을 천천히 보정
-        if not self._in_compression and signal_value >= self._baseline - 0.7:
+        if (
+            not self._in_compression
+            and self._baseline - 0.7 <= signal_value <= self._baseline + 2.0
+        ):
             self._baseline = (self._baseline * 0.98) + (signal_value * 0.02)
 
         raw_depth = max(0.0, self._baseline - signal_value)

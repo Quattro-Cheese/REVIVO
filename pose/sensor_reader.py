@@ -1,9 +1,19 @@
 import serial
 import time
+from math import isfinite
 
 
 class UltrasonicReader:
-    def __init__(self, port="COM13", baudrate=9600):
+    def __init__(
+        self,
+        port="COM13",
+        baudrate=9600,
+        min_distance_cm=2.0,
+        max_distance_cm=40.0,
+    ):
+        self.min_distance_cm = min_distance_cm
+        self.max_distance_cm = max_distance_cm
+
         try:
             self.ser = serial.Serial(port, baudrate, timeout=0.1)
             time.sleep(2)
@@ -25,9 +35,15 @@ class UltrasonicReader:
             if not line.startswith("DIST:"):
                 continue
             try:
-                self.distance_cm = float(line.replace("DIST:", ""))
+                distance_cm = float(line.replace("DIST:", ""))
             except ValueError:
                 continue
+            if not isfinite(distance_cm):
+                continue
+            if not self.min_distance_cm <= distance_cm <= self.max_distance_cm:
+                continue
+
+            self.distance_cm = distance_cm
         return self.distance_cm
 
     def close(self):
