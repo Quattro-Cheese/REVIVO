@@ -61,6 +61,7 @@ class RepCounter:
         # 교수님 피드백: 임계값도 한 값이 아닌 범위로 바꿀 것.
         target_depth_min_cm: float = 5.0,
         target_depth_max_cm: float = 6.0,
+        depth_scale: float = 1.0,
         # [수정] 순간 튐값 방지를 위한 작은 구간 median filter 크기.
         # 60Hz로 들어오는 초음파 센서값 중 노이즈 하나가 최저점으로 잡히는 문제를 줄임.
         depth_window_size: int = 5,
@@ -85,6 +86,8 @@ class RepCounter:
             raise ValueError(
                 "target_depth_min_cm must be less than or equal to target_depth_max_cm"
             )
+        if depth_scale <= 0:
+            raise ValueError("depth_scale must be greater than 0")
 
         self.calibration_samples = calibration_samples
         self.enter_threshold_cm = enter_threshold_cm
@@ -96,6 +99,7 @@ class RepCounter:
         # [수정] 적정 깊이 범위 저장.
         self.target_depth_min_cm = target_depth_min_cm
         self.target_depth_max_cm = target_depth_max_cm
+        self.depth_scale = depth_scale
 
         self._baseline_buffer: deque[float] = deque(maxlen=calibration_samples)
         self._baseline: Optional[float] = None
@@ -195,7 +199,8 @@ class RepCounter:
 
         # [수정] 현재 깊이 변화속도와 가속도 계산.
         # velocity > 0이면 점점 더 깊게 누르는 중, velocity < 0이면 손을 떼는 중.
-        velocity, acceleration = self._calc_motion(timestamp_ms, self._filtered_depth)
+        scaled_depth_now = self._filtered_depth * self.depth_scale
+        velocity, acceleration = self._calc_motion(timestamp_ms, scaled_depth_now)
         self._current_velocity = velocity
         self._current_acceleration = acceleration
 
@@ -207,7 +212,7 @@ class RepCounter:
             timestamp_ms=timestamp_ms,
             raw_signal=signal_value,
             baseline=self._baseline,
-            depth_now=self._filtered_depth,
+            depth_now=scaled_depth_now,
             peak_depth=self._latest_peak_depth(),
             count=self._count,
             bpm=bpm,
@@ -295,7 +300,7 @@ class RepCounter:
 
                 # 릴리즈까지 확인된 압박만 1회로 인정한다.
                 peak_time = self._current_peak_time or timestamp_ms
-                peak_depth = self._current_peak_depth
+                peak_depth = self._current_peak_depth * self.depth_scale
                 self._count += 1
                 self._compression_times.append(peak_time)
                 self._last_peak_time = peak_time
