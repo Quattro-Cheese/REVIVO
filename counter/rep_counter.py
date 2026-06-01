@@ -53,8 +53,9 @@ class RepCounter:
         self,
         calibration_samples: int = 15,
         enter_threshold_cm: float = 4.0,
-        release_threshold_cm: float = 1.2,
+        release_threshold_cm: float = 2.0,
         refractory_ms: int = 280,
+        rate_timeout_ms: int = 2500,
         target_bpm: int = 110,
         # [수정] CPR 적정 압박 깊이를 "하나의 값"이 아니라 "범위"로 둠.
         # 교수님 피드백: 임계값도 한 값이 아닌 범위로 바꿀 것.
@@ -74,6 +75,8 @@ class RepCounter:
             )
         if refractory_ms < 0:
             raise ValueError("refractory_ms must be greater than or equal to 0")
+        if rate_timeout_ms <= 0:
+            raise ValueError("rate_timeout_ms must be greater than 0")
         if target_bpm <= 0:
             raise ValueError("target_bpm must be greater than 0")
         if target_depth_min_cm <= 0 or target_depth_max_cm <= 0:
@@ -87,6 +90,7 @@ class RepCounter:
         self.enter_threshold_cm = enter_threshold_cm
         self.release_threshold_cm = release_threshold_cm
         self.refractory_ms = refractory_ms
+        self.rate_timeout_ms = rate_timeout_ms
         self.target_bpm = target_bpm
 
         # [수정] 적정 깊이 범위 저장.
@@ -131,7 +135,7 @@ class RepCounter:
             signal_value = None
 
         if signal_value is None:
-            bpm = self._calc_bpm()
+            bpm = self._calc_bpm(timestamp_ms)
             return RepResult(
                 timestamp_ms=timestamp_ms,
                 raw_signal=None,
@@ -154,7 +158,7 @@ class RepCounter:
             if len(self._baseline_buffer) >= self.calibration_samples:
                 self._baseline = float(median(self._baseline_buffer))
 
-            bpm = self._calc_bpm()
+            bpm = self._calc_bpm(timestamp_ms)
             return RepResult(
                 timestamp_ms=timestamp_ms,
                 raw_signal=signal_value,
@@ -198,7 +202,7 @@ class RepCounter:
         # 상태 전이는 EMA보다 반응이 빠른 median depth로 판단해 release 지연을 줄인다.
         self._update_state(timestamp_ms, median_depth)
 
-        bpm = self._calc_bpm()
+        bpm = self._calc_bpm(timestamp_ms)
         return RepResult(
             timestamp_ms=timestamp_ms,
             raw_signal=signal_value,
@@ -311,18 +315,22 @@ class RepCounter:
             return "Too deep"
         return "Good depth"
 
-    def _calc_bpm(self) -> Optional[float]:
+    def _calc_bpm(self, timestamp_ms: int) -> Optional[float]:
         if len(self._compression_times) < 2:
             return None
 
         times = list(self._compression_times)
+        if timestamp_ms - times[-1] > self.rate_timeout_ms:
+            return None
+
         intervals = [times[i] - times[i - 1] for i in range(1, len(times))]
-        intervals = [x for x in intervals if x > 0]
+        intervals = [x for x in intervals if 0 < x <= self.rate_timeout_ms]
 
         if not intervals:
             return None
 
-        avg_interval = sum(intervals) / len(intervals)
+        recent_intervals = intervals[-5:]
+        avg_interval = sum(recent_intervals) / len(recent_intervals)
         return 60000.0 / avg_interval
 
     def _rate_feedback(self, bpm: Optional[float]) -> str:
