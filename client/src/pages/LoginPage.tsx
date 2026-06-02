@@ -141,7 +141,7 @@ const s: Record<string, React.CSSProperties> = {
     overflow: "hidden",
   },
   leftInner: {
-    maxWidth: 420,
+    width: 420,
     position: "relative",
     zIndex: 1,
   },
