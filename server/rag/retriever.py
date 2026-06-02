@@ -33,7 +33,7 @@ class GuidelineRetriever:
         from sentence_transformers import SentenceTransformer
 
         print("RAG 모델 로드 중...")
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
         self.index = faiss.read_index(str(RAG_DIR / "guideline.index"))
         with open(RAG_DIR / "chunks.pkl", "rb") as f:
             self.chunks = pickle.load(f)
