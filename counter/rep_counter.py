@@ -64,7 +64,6 @@ class RepCounter:
         depth_scale: float = 1.0,
         min_signal_cm: float = 2.0,
         max_signal_cm: float = 40.0,
-
         # [수정] 순간 튐값 방지를 위한 작은 구간 median filter 크기.
         # 60Hz로 들어오는 초음파 센서값 중 노이즈 하나가 최저점으로 잡히는 문제를 줄임.
         depth_window_size: int = 5,
