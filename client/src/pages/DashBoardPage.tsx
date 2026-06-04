@@ -91,6 +91,16 @@ export default function DashboardPage() {
     navigate("/login");
   };
 
+  const handleDeleteSession = async (
+    e: React.MouseEvent,
+    sessionId: number,
+  ) => {
+    e.stopPropagation();
+    if (!confirm("이 훈련 기록을 삭제하시겠습니까?")) return;
+    await apiClient.delete(`/sessions/${sessionId}`);
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+  };
+
   // 차트 데이터 변환
   const bpmChartData = sessions.map((s, i) => ({
     name: `세션 ${i + 1}`,
@@ -362,9 +372,25 @@ export default function DashboardPage() {
               style={s.sessionCard}
               onClick={() => navigate(`/report/${session.id}`)}
             >
-              <p style={s.sessionDate}>
-                {new Date(session.created_at).toLocaleString("ko-KR")}
-              </p>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 10,
+                }}
+              >
+                <p style={{ ...s.sessionDate, marginBottom: 0 }}>
+                  {new Date(session.created_at).toLocaleString("ko-KR")}
+                </p>
+                <button
+                  style={s.deleteBtn}
+                  onClick={(e) => handleDeleteSession(e, session.id)}
+                  title="기록 삭제"
+                >
+                  ✕
+                </button>
+              </div>
               <SessionRow
                 label="평균 BPM"
                 value={session.avg_bpm?.toFixed(1)}
@@ -672,6 +698,17 @@ const s: Record<string, React.CSSProperties> = {
     transition: "all 0.2s",
   },
   sessionDate: { fontSize: 11, color: "#94A3B8", marginBottom: 10 },
+  deleteBtn: {
+    background: "transparent",
+    border: "none",
+    color: "#CBD5E1",
+    fontSize: 12,
+    cursor: "pointer",
+    padding: "2px 4px",
+    borderRadius: 4,
+    lineHeight: 1,
+    flexShrink: 0,
+  },
   sessionRow: {
     display: "flex",
     justifyContent: "space-between",
