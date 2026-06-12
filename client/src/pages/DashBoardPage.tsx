@@ -167,13 +167,21 @@ export default function DashboardPage() {
             label="평균 BPM"
             value={latest.avg_bpm?.toFixed(1)}
             good={latest.avg_bpm >= 100 && latest.avg_bpm <= 120}
-            badge="목표 범위 내"
+            badge={
+              latest.avg_bpm >= 100 && latest.avg_bpm <= 120
+                ? "목표 범위 내"
+                : "범위 벗어남"
+            }
           />
           <MetricCard
             label="평균 압박 깊이"
             value={`${latest.avg_depth_cm?.toFixed(1)} cm`}
             good={latest.avg_depth_cm >= 5 && latest.avg_depth_cm <= 6}
-            badge="적정 범위"
+            badge={
+              latest.avg_depth_cm >= 5 && latest.avg_depth_cm <= 6
+                ? "적정 범위"
+                : "범위 벗어남"
+            }
           />
           <MetricCard
             label="총 압박 횟수"
@@ -185,7 +193,9 @@ export default function DashboardPage() {
             label="자세 정확도"
             value={`${Math.round((latest.posture_correct_ratio ?? 0) * 100)}%`}
             good={(latest.posture_correct_ratio ?? 0) >= 0.8}
-            badge="양호"
+            badge={
+              (latest.posture_correct_ratio ?? 0) >= 0.8 ? "양호" : "개선 필요"
+            }
           />
         </div>
       )}
