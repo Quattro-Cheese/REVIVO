@@ -42,15 +42,23 @@ interface ReportData {
   guideline: string[];
 }
 
+interface SessionStats {
+  bpm_std: number;
+  depth_std: number;
+  posture_std: number;
+  count_std: number;
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user, loading: userLoading } = useCurrentUser();
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [predict, setPredict] = useState<PredictData | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
+  const [stats, setStats] = useState<SessionStats | null>(null);
 
   useEffect(() => {
-    if (!user) return; // user 로드 전엔 호출 안 함
+    if (!user) return;
     apiClient.get(`/sessions/${user.id}`).then((res) => setSessions(res.data));
     apiClient
       .get(`/predict/${user.id}`)
@@ -60,9 +68,12 @@ export default function DashboardPage() {
       .get(`/report/${user.id}`)
       .then((res) => setReport(res.data))
       .catch(() => {});
-  }, [user]); // user 바뀔 때마다 재호출
+    apiClient
+      .get(`/sessions/stats`)
+      .then((res) => setStats(res.data))
+      .catch(() => {});
+  }, [user]);
 
-  // 로딩 중 화면
   if (userLoading) {
     return (
       <div
@@ -79,7 +90,6 @@ export default function DashboardPage() {
     );
   }
 
-  // user 없으면 로그인으로
   if (!user) {
     navigate("/login");
     return null;
@@ -101,7 +111,6 @@ export default function DashboardPage() {
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
   };
 
-  // 차트 데이터 변환
   const bpmChartData = sessions.map((s, i) => ({
     name: `세션 ${i + 1}`,
     bpm: s.avg_bpm ? Math.round(s.avg_bpm * 10) / 10 : null,
@@ -112,25 +121,59 @@ export default function DashboardPage() {
     depth: s.avg_depth_cm ? Math.round(s.avg_depth_cm * 10) / 10 : null,
   }));
 
-  // 레이더 차트 데이터
   const latest = sessions[0];
+  const std = stats ?? FALLBACK_STD;
+
+  const overallCprScore =
+    sessions.length > 0
+      ? Math.round(
+          sessions.reduce((sum, s) => {
+            const sc = [
+              calcBpmScore(s.avg_bpm, std.bpm_std),
+              calcDepthScore(s.avg_depth_cm, std.depth_std),
+              calcPostureScore(s.posture_correct_ratio ?? 0, std.posture_std),
+              calcCountScore(s.total_count, s.duration_sec, std.count_std),
+            ];
+            const w = WEIGHTS;
+            return (
+              sum +
+              (w.bpm * sc[0] +
+                w.depth * sc[1] +
+                w.posture * sc[2] +
+                w.count * sc[3]) /
+                (w.bpm + w.depth + w.posture + w.count)
+            );
+          }, 0) / sessions.length,
+        )
+      : 0;
+
   const radarData = latest
     ? [
-        { subject: "압박 속도", score: bpmScore(latest.avg_bpm), full: 100 },
+        {
+          subject: "압박 속도",
+          score: calcBpmScore(latest.avg_bpm, std.bpm_std),
+          full: 100,
+        },
         {
           subject: "압박 깊이",
-          score: depthScore(latest.avg_depth_cm),
+          score: calcDepthScore(latest.avg_depth_cm, std.depth_std),
           full: 100,
         },
         {
           subject: "팔꿈치 자세",
-          score: Math.round((latest.posture_correct_ratio ?? 0) * 100),
+          score: calcPostureScore(
+            latest.posture_correct_ratio ?? 0,
+            std.posture_std,
+          ),
           full: 100,
         },
-        { subject: "일관성", score: 78, full: 100 },
         {
           subject: "압박 횟수",
-          score: Math.min(100, Math.round((latest.total_count / 30) * 100)),
+          score: calcCountScore(
+            latest.total_count,
+            latest.duration_sec,
+            std.count_std,
+          ),
           full: 100,
         },
       ]
@@ -200,23 +243,30 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* AI 예측 카드 */}
-      {predict && (
-        <div style={s.predictCard}>
-          <div>
-            <p style={s.predictLabel}>AI 분석 · 다음 훈련 집중 항목</p>
+      {/* CPR 수행 점수 + AI 예측 카드 */}
+      <div style={s.predictCard}>
+        <div>
+          <p style={s.predictLabel}>전체 세션 평균 · CPR 수행 점수</p>
+          <div style={s.predictScore}>
+            {sessions.length > 0 ? overallCprScore : "—"}
+          </div>
+          <p style={s.predictScoreLabel}>
+            z-score 정규화 · AHA 가이드라인 기준
+          </p>
+        </div>
+        {predict && (
+          <div style={{ textAlign: "right" }}>
+            <p style={{ ...s.predictLabel, marginBottom: 6 }}>
+              AI 분석 · 다음 훈련 집중 항목
+            </p>
             <p style={s.predictFocus}>{predict.focus}</p>
             <p style={s.predictConf}>
-              신뢰도 {predict.confidence}% · {predict.session_count}회 훈련 기반
-              분석
+              모델 확신도 {predict.confidence}% · {predict.session_count}회 훈련
+              기반
             </p>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={s.predictScore}>{predict.confidence}</div>
-            <div style={s.predictScoreLabel}>신뢰도 점수</div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* 차트 그리드 */}
       {sessions.length > 0 && (
@@ -510,18 +560,48 @@ function ChartLegend({
 
 // ── 유틸 ──────────────────────────────
 
-function bpmScore(bpm: number): number {
+const WEIGHTS = { bpm: 0.3, depth: 0.4, posture: 0.25, count: 0.25 };
+const FALLBACK_STD = {
+  bpm_std: 15.0,
+  depth_std: 1.5,
+  posture_std: 0.2,
+  count_std: 10.0,
+};
+
+function calcBpmScore(bpm: number, sigma: number): number {
   if (!bpm) return 0;
-  if (bpm >= 100 && bpm <= 120) return 100;
-  if (bpm < 100) return Math.max(0, Math.round(100 - (100 - bpm) * 3));
-  return Math.max(0, Math.round(100 - (bpm - 120) * 3));
+  const deviation = bpm < 100 ? 100 - bpm : bpm > 120 ? bpm - 120 : 0;
+  return Math.max(0, Math.round(100 - WEIGHTS.bpm * (deviation / sigma) * 100));
 }
 
-function depthScore(depth: number): number {
+function calcDepthScore(depth: number, sigma: number): number {
   if (!depth) return 0;
-  if (depth >= 5 && depth <= 6) return 100;
-  if (depth < 5) return Math.max(0, Math.round(100 - (5 - depth) * 30));
-  return Math.max(0, Math.round(100 - (depth - 6) * 30));
+  const deviation = depth < 5 ? 5 - depth : depth > 6 ? depth - 6 : 0;
+  return Math.max(
+    0,
+    Math.round(100 - WEIGHTS.depth * (deviation / sigma) * 100),
+  );
+}
+
+function calcPostureScore(ratio: number, sigma: number): number {
+  const deviation = 1.0 - ratio;
+  return Math.max(
+    0,
+    Math.round(100 - WEIGHTS.posture * (deviation / sigma) * 100),
+  );
+}
+
+function calcCountScore(
+  count: number,
+  durationSec: number,
+  sigma: number,
+): number {
+  const target = (durationSec / 60) * 110;
+  const deviation = Math.abs(count - target);
+  return Math.max(
+    0,
+    Math.round(100 - WEIGHTS.count * (deviation / sigma) * 100),
+  );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
