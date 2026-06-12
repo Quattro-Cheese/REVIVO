@@ -1,3 +1,4 @@
+import math
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from .. import models
@@ -5,6 +6,39 @@ from ..database import get_db
 from ..ml.trainer import train_model
 
 router = APIRouter()
+
+
+def _std(values: list[float]) -> float:
+    n = len(values)
+    if n < 2:
+        return 0.0
+    mean = sum(values) / n
+    variance = sum((x - mean) ** 2 for x in values) / (n - 1)
+    return math.sqrt(variance) if variance > 0 else 0.0
+
+
+@router.get("/stats")
+def get_session_stats(db: Session = Depends(get_db)):
+    """전체 세션의 지표별 표준편차를 반환 (점수 정규화용)"""
+    sessions = db.query(models.Session).all()
+
+    FALLBACK = {"bpm_std": 15.0, "depth_std": 1.5, "posture_std": 0.20, "count_std": 10.0}
+
+    if len(sessions) < 2:
+        return {**FALLBACK, "session_count": len(sessions)}
+
+    bpm_std = _std([float(s.avg_bpm) for s in sessions if s.avg_bpm is not None])
+    depth_std = _std([float(s.avg_depth_cm) for s in sessions if s.avg_depth_cm is not None])
+    posture_std = _std([float(s.posture_correct_ratio) for s in sessions if s.posture_correct_ratio is not None])
+    count_std = _std([float(s.total_count) for s in sessions if s.total_count is not None])
+
+    return {
+        "bpm_std": max(bpm_std, 1.0),
+        "depth_std": max(depth_std, 0.1),
+        "posture_std": max(posture_std, 0.01),
+        "count_std": max(count_std, 1.0),
+        "session_count": len(sessions),
+    }
 
 
 @router.post("/save")
@@ -39,14 +73,12 @@ def save_session(
     }
 
 
-# 세션 단건 조회
 @router.get("/detail/{session_id}")
 def get_session_detail(session_id: int, db: Session = Depends(get_db)):
     session = db.query(models.Session).filter(models.Session.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
 
-    # 같은 유저의 이전 세션 조회 (비교용)
     prev_session = (
         db.query(models.Session)
         .filter(

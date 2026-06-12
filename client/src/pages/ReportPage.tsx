@@ -34,11 +34,20 @@ interface ReportData {
   guideline: string[];
 }
 
+interface SessionStats {
+  bpm_std: number;
+  depth_std: number;
+  posture_std: number;
+  count_std: number;
+  session_count: number;
+}
+
 export default function ReportPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
+  const [stats, setStats] = useState<SessionStats | null>(null);
   const [loading, setLoading] = useState(true);
   const { user } = useCurrentUser();
 
@@ -47,10 +56,12 @@ export default function ReportPage() {
     Promise.all([
       apiClient.get(`/sessions/detail/${sessionId}`),
       apiClient.get(`/report/${user.id}`),
+      apiClient.get(`/sessions/stats`),
     ])
-      .then(([detailRes, reportRes]) => {
+      .then(([detailRes, reportRes, statsRes]) => {
         setDetail(detailRes.data);
         setReport(reportRes.data);
+        setStats(statsRes.data);
       })
       .finally(() => setLoading(false));
   }, [sessionId, user]);
@@ -71,24 +82,34 @@ export default function ReportPage() {
     );
   }
 
+  const std = stats ?? FALLBACK_STD;
+  const scores = {
+    bpm: calcBpmScore(detail.avg_bpm, std.bpm_std),
+    depth: calcDepthScore(detail.avg_depth_cm, std.depth_std),
+    posture: calcPostureScore(
+      detail.posture_correct_ratio ?? 0,
+      std.posture_std,
+    ),
+    count: calcCountScore(
+      detail.total_count,
+      detail.duration_sec,
+      std.count_std,
+    ),
+  };
+
   const radarData = [
-    { subject: "압박 속도", score: bpmScore(detail.avg_bpm), full: 100 },
-    { subject: "압박 깊이", score: depthScore(detail.avg_depth_cm), full: 100 },
-    {
-      subject: "팔꿈치 자세",
-      score: Math.round((detail.posture_correct_ratio ?? 0) * 100),
-      full: 100,
-    },
-    { subject: "일관성", score: 78, full: 100 },
-    {
-      subject: "압박 횟수",
-      score: Math.min(100, Math.round((detail.total_count / 30) * 100)),
-      full: 100,
-    },
+    { subject: "압박 속도", score: scores.bpm, full: 100 },
+    { subject: "압박 깊이", score: scores.depth, full: 100 },
+    { subject: "팔꿈치 자세", score: scores.posture, full: 100 },
+    { subject: "압박 횟수", score: scores.count, full: 100 },
   ];
 
   const overallScore = Math.round(
-    radarData.reduce((acc, d) => acc + d.score, 0) / radarData.length,
+    (WEIGHTS.bpm * scores.bpm +
+      WEIGHTS.depth * scores.depth +
+      WEIGHTS.posture * scores.posture +
+      WEIGHTS.count * scores.count) /
+      (WEIGHTS.bpm + WEIGHTS.depth + WEIGHTS.posture + WEIGHTS.count),
   );
 
   return (
@@ -120,7 +141,7 @@ export default function ReportPage() {
         <div style={s.scoreLeft}>
           <p style={s.scoreLabel}>종합 점수</p>
           <div style={s.scoreBig}>{overallScore}</div>
-          <p style={s.scoreDesc}>AHA 가이드라인 기준 5개 항목 평균</p>
+          <p style={s.scoreDesc}>AHA 가이드라인 기준 4개 항목 가중 평균</p>
         </div>
         <div style={s.scoreRight}>
           {report && (
@@ -339,20 +360,53 @@ function CompareRow({
   );
 }
 
-// ── 유틸 ──────────────────────────────
+// ── 점수 계산 ──────────────────────────────
+// score_i = max(0, 100 - w_i × |deviation_i / σ_i| × 100)
+// deviation: 정답 범위(AHA 가이드라인)에서 벗어난 양 (범위 내이면 0)
+// σ: 전체 세션의 해당 지표 표준편차 (단위 통일을 위한 정규화)
 
-function bpmScore(bpm: number): number {
+const WEIGHTS = { bpm: 0.3, depth: 0.4, posture: 0.25, count: 0.25 };
+
+const FALLBACK_STD = {
+  bpm_std: 15.0,
+  depth_std: 1.5,
+  posture_std: 0.2,
+  count_std: 10.0,
+};
+
+function calcBpmScore(bpm: number, sigma: number): number {
   if (!bpm) return 0;
-  if (bpm >= 100 && bpm <= 120) return 100;
-  if (bpm < 100) return Math.max(0, Math.round(100 - (100 - bpm) * 3));
-  return Math.max(0, Math.round(100 - (bpm - 120) * 3));
+  const deviation = bpm < 100 ? 100 - bpm : bpm > 120 ? bpm - 120 : 0;
+  return Math.max(0, Math.round(100 - WEIGHTS.bpm * (deviation / sigma) * 100));
 }
 
-function depthScore(depth: number): number {
+function calcDepthScore(depth: number, sigma: number): number {
   if (!depth) return 0;
-  if (depth >= 5 && depth <= 6) return 100;
-  if (depth < 5) return Math.max(0, Math.round(100 - (5 - depth) * 30));
-  return Math.max(0, Math.round(100 - (depth - 6) * 30));
+  const deviation = depth < 5 ? 5 - depth : depth > 6 ? depth - 6 : 0;
+  return Math.max(
+    0,
+    Math.round(100 - WEIGHTS.depth * (deviation / sigma) * 100),
+  );
+}
+function calcPostureScore(ratio: number, sigma: number): number {
+  const deviation = 1.0 - ratio;
+  return Math.max(
+    0,
+    Math.round(100 - WEIGHTS.posture * (deviation / sigma) * 100),
+  );
+}
+
+function calcCountScore(
+  count: number,
+  durationSec: number,
+  sigma: number,
+): number {
+  const target = (durationSec / 60) * 110;
+  const deviation = Math.abs(count - target);
+  return Math.max(
+    0,
+    Math.round(100 - WEIGHTS.count * (deviation / sigma) * 100),
+  );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
