@@ -42,7 +42,7 @@ def login_and_get_user_id() -> int:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         if res.status_code != 200:
-            print("로그인 실패: 아이디 또는 비밀번호를 확인해주세요.")
+            print(f"로그인 실패 (status={res.status_code}): {res.text}")
             exit(1)
 
         token = res.json()["access_token"]
@@ -86,7 +86,7 @@ def save_session_to_db(
 
 
 def update_smoothed_bpm(
-    bpm_history,
+    bpm_history: deque[tuple[int, float]],
     timestamp_ms: int,
     bpm: Optional[float],
 ) -> Optional[float]:
@@ -207,7 +207,7 @@ def main() -> None:
     tts = TTSSpeaker(interval_sec=1.0)
 
     # 최근 BPM 값을 저장하는 버퍼
-    bpm_history = deque()
+    bpm_history: deque[tuple[int, float]] = deque()
 
     cap = cv2.VideoCapture(0)
     rep_result = rep_counter.update(
