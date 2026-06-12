@@ -229,8 +229,8 @@ export default function DashboardPage() {
           <MetricCard
             label="총 압박 횟수"
             value={`${latest.total_count}회`}
-            good={true}
-            badge="세션 완료"
+            good={latest.total_count >= 30}
+            badge={latest.total_count >= 30 ? "목표 달성" : "횟수 부족"}
           />
           <MetricCard
             label="자세 정확도"
@@ -560,6 +560,7 @@ function ChartLegend({
 
 // ── 유틸 ──────────────────────────────
 
+const Z_MAX = 2.0;
 const WEIGHTS = { bpm: 0.3, depth: 0.4, posture: 0.25, count: 0.25 };
 const FALLBACK_STD = {
   bpm_std: 15.0,
@@ -571,24 +572,18 @@ const FALLBACK_STD = {
 function calcBpmScore(bpm: number, sigma: number): number {
   if (!bpm) return 0;
   const deviation = bpm < 100 ? 100 - bpm : bpm > 120 ? bpm - 120 : 0;
-  return Math.max(0, Math.round(100 - WEIGHTS.bpm * (deviation / sigma) * 100));
+  return Math.max(0, Math.round(100 * (1 - deviation / (sigma * Z_MAX))));
 }
 
 function calcDepthScore(depth: number, sigma: number): number {
   if (!depth) return 0;
   const deviation = depth < 5 ? 5 - depth : depth > 6 ? depth - 6 : 0;
-  return Math.max(
-    0,
-    Math.round(100 - WEIGHTS.depth * (deviation / sigma) * 100),
-  );
+  return Math.max(0, Math.round(100 * (1 - deviation / (sigma * Z_MAX))));
 }
 
 function calcPostureScore(ratio: number, sigma: number): number {
   const deviation = 1.0 - ratio;
-  return Math.max(
-    0,
-    Math.round(100 - WEIGHTS.posture * (deviation / sigma) * 100),
-  );
+  return Math.max(0, Math.round(100 * (1 - deviation / (sigma * Z_MAX))));
 }
 
 function calcCountScore(
@@ -598,10 +593,7 @@ function calcCountScore(
 ): number {
   const target = (durationSec / 60) * 110;
   const deviation = Math.abs(count - target);
-  return Math.max(
-    0,
-    Math.round(100 - WEIGHTS.count * (deviation / sigma) * 100),
-  );
+  return Math.max(0, Math.round(100 * (1 - deviation / (sigma * Z_MAX))));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

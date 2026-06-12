@@ -141,7 +141,10 @@ export default function ReportPage() {
         <div style={s.scoreLeft}>
           <p style={s.scoreLabel}>종합 점수</p>
           <div style={s.scoreBig}>{overallScore}</div>
-          <p style={s.scoreDesc}>AHA 가이드라인 기준 4개 항목 가중 평균</p>
+          <p style={s.scoreDesc}>
+            z-score 정규화 · AHA 4개 항목 가중 평균 (BPM 30% / 깊이 40% / 자세
+            25% / 횟수 25%)
+          </p>
         </div>
         <div style={s.scoreRight}>
           {report && (
@@ -361,10 +364,18 @@ function CompareRow({
 }
 
 // ── 점수 계산 ──────────────────────────────
-// score_i = max(0, 100 - w_i × |deviation_i / σ_i| × 100)
-// deviation: 정답 범위(AHA 가이드라인)에서 벗어난 양 (범위 내이면 0)
-// σ: 전체 세션의 해당 지표 표준편차 (단위 통일을 위한 정규화)
+//
+// 공식: s_i = max(0, 100 × (1 - |deviation_i| / (σ_i × Z_MAX)))
+//   deviation: AHA 허용 범위에서 벗어난 양 (범위 내이면 0)
+//   σ_i: DB 전체 세션의 해당 지표 표준편차
+//   Z_MAX = 2.0: 허용 범위에서 2σ 이탈 시 0점 (임상적 심각 이탈 기준)
+//
+// 최종 점수: S = Σ(w_i × s_i) / Σ(w_i) — 가중치는 조합 단계에서만 적용
+//
+// 근거: AHA 2020 Guidelines (Panchal et al.), Meaney et al. 2013 CPR Quality
+// σ fallback: BPM σ=15 (Bobrow 2008), 깊이 σ=1.5cm (Kramer-Johansen 2006)
 
+const Z_MAX = 2.0;
 const WEIGHTS = { bpm: 0.3, depth: 0.4, posture: 0.25, count: 0.25 };
 
 const FALLBACK_STD = {
@@ -377,23 +388,17 @@ const FALLBACK_STD = {
 function calcBpmScore(bpm: number, sigma: number): number {
   if (!bpm) return 0;
   const deviation = bpm < 100 ? 100 - bpm : bpm > 120 ? bpm - 120 : 0;
-  return Math.max(0, Math.round(100 - WEIGHTS.bpm * (deviation / sigma) * 100));
+  return Math.max(0, Math.round(100 * (1 - deviation / (sigma * Z_MAX))));
 }
 
 function calcDepthScore(depth: number, sigma: number): number {
   if (!depth) return 0;
   const deviation = depth < 5 ? 5 - depth : depth > 6 ? depth - 6 : 0;
-  return Math.max(
-    0,
-    Math.round(100 - WEIGHTS.depth * (deviation / sigma) * 100),
-  );
+  return Math.max(0, Math.round(100 * (1 - deviation / (sigma * Z_MAX))));
 }
 function calcPostureScore(ratio: number, sigma: number): number {
   const deviation = 1.0 - ratio;
-  return Math.max(
-    0,
-    Math.round(100 - WEIGHTS.posture * (deviation / sigma) * 100),
-  );
+  return Math.max(0, Math.round(100 * (1 - deviation / (sigma * Z_MAX))));
 }
 
 function calcCountScore(
@@ -403,10 +408,7 @@ function calcCountScore(
 ): number {
   const target = (durationSec / 60) * 110;
   const deviation = Math.abs(count - target);
-  return Math.max(
-    0,
-    Math.round(100 - WEIGHTS.count * (deviation / sigma) * 100),
-  );
+  return Math.max(0, Math.round(100 * (1 - deviation / (sigma * Z_MAX))));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
