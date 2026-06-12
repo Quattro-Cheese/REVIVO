@@ -127,7 +127,7 @@ def draw_sensor_values(frame, distance_cm, rep_result) -> None:
     if rep_result.depth_now is not None:
         cv2.putText(
             frame,
-            f"Depth: {rep_result.depth_now:.1f} cm",
+            f"Depth: {rep_result.depth_now:.0f} cm",
             (10, y),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
@@ -303,7 +303,10 @@ def main() -> None:
             log_file.flush()
 
             print("DIST:", distance_cm)
-            print("DEPTH:", rep_result.depth_now)
+            print(
+                "DEPTH:",
+                None if rep_result.depth_now is None else round(rep_result.depth_now),
+            )
             print("BPM:", rep_result.bpm)
             print("SMOOTHED BPM:", smoothed_bpm)
             print("COUNT:", rep_result.count)
@@ -364,7 +367,7 @@ def main() -> None:
             save_session_to_db(
                 user_id=user_id,
                 avg_bpm=round(avg_bpm, 2),
-                avg_depth_cm=round(avg_depth, 2),
+                avg_depth_cm=int(round(avg_depth)),
                 total_count=total_count,
                 posture_correct_ratio=round(posture_ratio, 2),
                 duration_sec=round(elapsed_total, 2),
