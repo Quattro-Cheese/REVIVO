@@ -1,3 +1,5 @@
+import math
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from .. import models
@@ -8,6 +10,16 @@ import numpy as np
 from pathlib import Path
 import os
 
+def _safe_float(v) -> float | None:
+    """NaN/Inf를 None으로 변환해 JSON 직렬화 오류 방지"""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+        return None if (math.isnan(f) or math.isinf(f)) else f
+    except (TypeError, ValueError):
+        return None
+      
 router = APIRouter()
 
 ML_DIR = Path(__file__).resolve().parent.parent / "ml"
@@ -100,11 +112,11 @@ def generate_report(user_id: int, db: Session = Depends(get_db)):
         "focus": focus,
         "trend": trend,
         "latest_session": {
-            "avg_bpm": latest.avg_bpm,
-            "avg_depth_cm": latest.avg_depth_cm,
+            "avg_bpm": _safe_float(latest.avg_bpm),
+            "avg_depth_cm": _safe_float(latest.avg_depth_cm),
             "total_count": latest.total_count,
-            "posture_correct_ratio": latest.posture_correct_ratio,
-            "duration_sec": latest.duration_sec,
+            "posture_correct_ratio": _safe_float(latest.posture_correct_ratio),
+            "duration_sec": _safe_float(latest.duration_sec),
         },
         "guideline": guideline_chunks,
     }
