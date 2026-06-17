@@ -5,6 +5,8 @@ from datetime import datetime
 from collections import deque
 from typing import Optional
 import csv
+import subprocess
+import sys
 import time
 import cv2
 import requests
@@ -24,9 +26,23 @@ MAX_FRAME_FAILURES = 10
 
 # 속도 피드백은 순간 BPM이 아니라 최근 구간 평균 BPM으로 판단
 BPM_SMOOTHING_WINDOW_MS = 1000
+SESSION_DURATION_SEC = 60
+SESSION_DURATION_MS = SESSION_DURATION_SEC * 1000
 
 load_dotenv()
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+
+
+def launch_metronome_window(bpm: int) -> subprocess.Popen | None:
+    script_path = Path(__file__).resolve().parent / "metronome_window.py"
+
+    try:
+        return subprocess.Popen(
+            [sys.executable, str(script_path), "--bpm", str(bpm)],
+        )
+    except Exception as e:
+        print(f"METRONOME WINDOW ERROR: {e}")
+        return None
 
 
 def login_and_get_user_id() -> int:
@@ -214,6 +230,7 @@ def main() -> None:
         timestamp_ms=int(time.monotonic() * 1000),
         signal_value=None,
     )
+    metronome_process: subprocess.Popen | None = None
 
     if not cap.isOpened():
         print("카메라를 열 수 없습니다.")
@@ -224,8 +241,11 @@ def main() -> None:
 
     tts.speak("시작합니다.")
 
+    metronome_process = launch_metronome_window(rep_result.metronome_bpm)
+
     consecutive_failures = 0
     start_timestamp_ms = int(time.monotonic() * 1000)
+    session_completed = False
 
     try:
         while True:
@@ -258,6 +278,11 @@ def main() -> None:
 
             timestamp_ms = int(time.monotonic() * 1000)
             elapsed_ms = timestamp_ms - start_timestamp_ms
+
+            if elapsed_ms >= SESSION_DURATION_MS:
+                session_completed = True
+                print("SESSION COMPLETE: 60 seconds elapsed")
+                break
 
             rep_result = rep_counter.update(
                 timestamp_ms=timestamp_ms,
@@ -337,13 +362,21 @@ def main() -> None:
                 break
 
     finally:
+        if metronome_process is not None and metronome_process.poll() is None:
+            metronome_process.terminate()
+
         log_file.close()
         ultrasonic.close()
         cap.release()
         detector.close()
         cv2.destroyAllWindows()
 
-        elapsed_total = (int(time.monotonic() * 1000) - start_timestamp_ms) / 1000.0
+        if session_completed:
+            elapsed_total = float(SESSION_DURATION_SEC)
+        else:
+            elapsed_total = (
+                int(time.monotonic() * 1000) - start_timestamp_ms
+            ) / 1000.0
 
         try:
             df = pd.read_csv(log_path)
