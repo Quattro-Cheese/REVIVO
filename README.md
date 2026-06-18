@@ -259,42 +259,31 @@ USE_RAG=true
 | Backend API | Render | `https://cpr-backend-vjpr.onrender.com` |
 | Frontend    | Vercel | `https://cpr-frontend.vercel.app`       |
 
-## 팀원 소개
+|                                                   김윤지                                                   |                                              정유경                                              |                                            김윤기                                            |                                                안아름                                                |
+| :--------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------: |
+| <a href="https://github.com/yooncandooit"><img src="https://github.com/yooncandooit.png" width="120"/></a> | <a href="https://github.com/ugang04"><img src="https://github.com/ugang04.png" width="120"/></a> | <a href="https://github.com/62-62"><img src="https://github.com/62-62.png" width="120"/></a> | <a href="https://github.com/arumicube"><img src="https://github.com/arumicube.png" width="120"/></a> |
+|                                            AI / Web Full-Stack                                             |                                      Embedded / Core Logic                                       |                                 Algorithm / Data Processing                                  |                                         Computer Vision / PM                                         |
+|                                 [GitHub](https://github.com/yooncandooit)                                  |                               [GitHub](https://github.com/ugang04)                               |                              [GitHub](https://github.com/62-62)                              |                                [GitHub](https://github.com/arumicube)                                |
 
-<table>
-  <tr>
-    <td align="center" width="200">
-      <a href="https://github.com/yooncandooit">
-        <img src="https://github.com/yooncandooit.png" width="120" style="border-radius:50%"/><br/>
-        <b>김윤지</b>
-      </a><br/>
-      Infra · FE · BE · AI/ML
-    </td>
-    <td align="center" width="200">
-      <a href="https://github.com/arumicube">
-        <img src="https://github.com/arumicube.png" width="120" style="border-radius:50%"/><br/>
-        <b>arumicube</b>
-      </a><br/>
-      Vision
-    </td>
-    <td align="center" width="200">
-      <a href="https://github.com/62-62">
-        <img src="https://github.com/62-62.png" width="120" style="border-radius:50%"/><br/>
-        <b>62-62</b>
-      </a><br/>
-      Vision
-    </td>
-    <td align="center" width="200">
-      <a href="https://github.com/ugang04">
-        <img src="https://github.com/ugang04.png" width="120" style="border-radius:50%"/><br/>
-        <b>ugang04</b>
-      </a><br/>
-      Hardware
-    </td>
-  </tr>
-</table>
+### 팀원별 상세 수행 역할
 
-> **Quattro Cheese** | 동국대학교 캡스톤 디자인
+- 김윤지 (AI / Web Full-Stack)
+  - 웹 서비스 및 인프라 구축: 풀스택 개발 환경 세팅, SPA 라우팅 오류 수정, 세션 관리 기능 구현 및 DB 연동
+  - 경량화 AI 적용: RAG 모델 최적화 및 인덱스 재빌드를 통한 서버 성능 개선
+
+- 정유경 (Embedded / Core Logic)
+  - 하드웨어 연동: 초음파 센서의 시리얼 통신(Serial Reader) 구현 및 BPM·압박 깊이 계산 로직을 메인 애플리케이션에 연동
+  - 실시간 피드백 시스템: TTS 음성 피드백 기능 개발 및 CPR 피드백 우선순위 로직 수정, 세션 CSV 데이터 저장 추가
+
+- 김윤기 (Algorithm / Data Processing)
+  - 데이터 정제 및 보정: 초음파 거리(Depth) 데이터의 정수 변환 및 튀는 값(노이즈) 필터링 알고리즘 설계
+  - 판단 로직 안정화: 압박 해제 임계값(release_threshold) 세부 조정 및 CPR 반복 카운터 로직(RepCounter) 모듈 최적화
+
+- 안아름 (Computer Vision / PM)
+  - 초기 비전·하드웨어 기반 구축: MediaPipe Pose 모듈 세팅 및 연동, 초음파 센서 압박 깊이 측정·LED 피드백 구현, Pose Estimation 로직 작성
+  - 비전 로직 설계: MediaPipe Pose 기반 핵심 커스텀 비전 로직 설계 및 팀 개발 기여 코드 리뷰
+
+> Quattro Cheese | 동국대학교 캡스톤 디자인
 
 ## 커밋 컨벤션
 
