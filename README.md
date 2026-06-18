@@ -259,6 +259,7 @@ USE_RAG=true
 | Backend API | Render | `https://cpr-backend-vjpr.onrender.com` |
 | Frontend    | Vercel | `https://cpr-frontend.vercel.app`       |
 
+# 팀원 및 팀 소개
 |                                                   김윤지                                                   |                                              정유경                                              |                                            김윤기                                            |                                                안아름                                                |
 | :--------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------: |
 | <a href="https://github.com/yooncandooit"><img src="https://github.com/yooncandooit.png" width="120"/></a> | <a href="https://github.com/ugang04"><img src="https://github.com/ugang04.png" width="120"/></a> | <a href="https://github.com/62-62"><img src="https://github.com/62-62.png" width="120"/></a> | <a href="https://github.com/arumicube"><img src="https://github.com/arumicube.png" width="120"/></a> |
